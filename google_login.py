@@ -1,5 +1,7 @@
-from gmusicapi.clients import Mobileclient
 from pathlib import Path
+
+from gmusicapi.clients import Mobileclient
+
 
 config_dir = Path.cwd()/'config'
 auth_file = config_dir/'google.auth'

@@ -2,7 +2,7 @@ import array
 import ctypes
 from logging import getLogger
 
-from aria.exceptions import OpusError, OpusNotFound, OpusNotReady
+from aria.exceptions import OpusNotReady
 
 log = getLogger(__name__)
 OPUSLIB = ['libopus-0.x86', 'libopus-0.x64', 'libopus.so.0', 'libopus.0.dylib']
@@ -26,7 +26,7 @@ class OpusEncoder():
 
         if not self.opus:
             log.critical('Failed to load libopus!')
-            raise OpusNotFound()
+            raise OpusNotReady()
 
         try:
             # https://opus-codec.org/docs/opus_api-1.2/index.html
@@ -73,7 +73,7 @@ class OpusEncoder():
                                               ctypes.c_int32]
             self.opus.opus_encode.restype = ctypes.c_int32
         except:
-            log.critical('Failed to set prototype to libopus functions!')
+            log.critical('Failed to set prototype to libopus functions!', exc_info=True)
             raise OpusNotReady()
 
     def create_encoder(self, sampling_rate:int, channels:int,

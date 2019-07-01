@@ -9,6 +9,7 @@ class Config():
 
         self.player_socket = None
         self.stream_socket = None
+        self.providers_config = None
 
         self.load_config()
 
@@ -18,3 +19,4 @@ class Config():
 
         self.player_socket = self.config.get('player_socket') or '/tmp/aria_player.sock'
         self.stream_socket = self.config.get('stream_socket') or '/tmp/aria_stream.sock'
+        self.providers_config = self.config.get('providers_config') or {}

@@ -3,3 +3,8 @@
 
 *.pyc
 *__pycache__
+
+/*.json
+/test_*.py
+/config/*
+!/config/config_default.json

@@ -1,0 +1,9 @@
+{
+    "player_socket": "",
+    "stream_socket": "",
+    "providers_config": {
+        "youtube": {
+            "api_key": ""
+        }
+    }
+}

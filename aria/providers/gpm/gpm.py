@@ -18,8 +18,8 @@ log = getLogger(__name__)
 
 
 class GPMEntry(PlayableEntry):
-    def __init__(self, playlist, gpm:'GPMProvider', song:Union[GPMSong, EntryOverview]):
-        self.playlist = playlist
+    def __init__(self, player, gpm:'GPMProvider', song:Union[GPMSong, EntryOverview]):
+        self.player = player
         self.gpm = gpm
         self.entry = song if isinstance(song, EntryOverview) else self.gpm.enclose_entry(song)
 
@@ -29,9 +29,11 @@ class GPMEntry(PlayableEntry):
         self.thumbnail = self.entry.thumbnail
         self.filename = f'{self.gpm.name}-{self.song_id}.mp3'
         
+        self.process = False
         self.ready = asyncio.Event()
 
     async def download(self):
+        self.process = True
         if Path(self.filename).is_file():
             log.info(f'Already downloaded: {self.filename}')
             self.ready.set()
@@ -42,8 +44,8 @@ class GPMEntry(PlayableEntry):
             except:
                 log.error('Failed to download:\n', exc_info=True)
         
-        if not self.ready.is_set():
-            self.playlist.cb_download_failed()
+        # if not self.ready:
+        #     self.player.cb_download_failed()
 
 
 class GPMProvider(Provider):
@@ -70,17 +72,16 @@ class GPMProvider(Provider):
 
         self.loop.create_task(self.update(force=True))
 
-    async def resolve(self, playlist, uri:str) -> Optional[GPMEntry]:
-        # validate
+    async def resolve(self, uri:str) -> Sequence[EntryOverview]:
         try:
             gpm, track, track_id = uri.split(':')
         except:
             log.error(f'Invalid uri: {uri}')
-            return
+            return []
 
         if not gpm == 'gpm' or not track == 'track':
             log.error(f'Not a gpm uri: {uri}')
-            return
+            return []
 
         await self.update_lock.wait()
         song = None
@@ -89,7 +90,11 @@ class GPMProvider(Provider):
         except:
             log.error(f'DB failed:\n', exc_info=True)
 
-        return GPMEntry(playlist, self, song) if song else None
+        return [self.enclose_entry(song)] if song else []
+
+    async def resolve_playable(self, uri:str, player) -> Sequence[GPMEntry]:
+        resolved = await self.resolve(uri)
+        return [GPMEntry(player, self, song) for song in resolved]
 
     async def search(self, keyword:str) -> Sequence[EntryOverview]:
         await self.update_lock.wait()

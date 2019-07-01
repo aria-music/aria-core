@@ -3,7 +3,8 @@ import asyncio
 from aiohttp import web
 
 from aria.config import Config
-from aria.view import PlayerView, StreamView
+from aria.player_view import PlayerView
+from aria.stream_view import StreamView
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
@@ -14,7 +15,7 @@ if __name__ == '__main__':
     player_app.add_routes([web.get('/player', player.get_ws)])
     player_app_runner = web.AppRunner(player_app)
     
-    stream = StreamView(config)
+    stream = StreamView(config, player)
     stream_app = web.Application()
     stream_app.add_routes([web.get('/stream', stream.get_ws)])
     stream_app_runner = web.AppRunner(stream_app)

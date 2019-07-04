@@ -10,6 +10,7 @@ class FFMpegPlayer():
         self.ffmpeg = None
 
     def create(self, filename):
+        self.kill()
         try:
             self.ffmpeg = subprocess.Popen(
                 [
@@ -25,6 +26,7 @@ class FFMpegPlayer():
                 ],
                 stdout=subprocess.PIPE
             )
+            log.debug('FFMpeg created!')
         except:
             log.error('Failed to start ffmpeg: ', exc_info=True)
 

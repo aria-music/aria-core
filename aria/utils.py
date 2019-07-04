@@ -1,6 +1,7 @@
 import random
 from pathlib import Path
 from string import ascii_letters, digits
+import json
 
 CHARACTERS = ascii_letters + digits
 KEY_LENGTH = 40
@@ -12,3 +13,5 @@ def generate_key(length:int=KEY_LENGTH):
 def save_file(filename:str, data:bytes):
     with Path(filename).open('wb') as f:
         f.write(data)
+
+

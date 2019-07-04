@@ -12,23 +12,23 @@ log = getLogger(__name__)
 
 
 class Playlist():
-    def __init__(self, file:Union[str, Path], provider, pool=None):
+    def __init__(self, file:Union[str, Path], provider, pool=None, loop=None):
         self.file = file
         self.prov = provider
         self.pool = pool or ThreadPoolExecutor(max_workers=4)
 
-        self.loop = asyncio.get_event_loop()
+        self.loop = loop or asyncio.get_event_loop()
         self.list = {}
 
         #self.loop.create_task(self.load_file())
         self.do_load_file()
 
     @classmethod
-    def create(cls, filename, provider, pool):
+    def create(cls, filename, provider, pool, loop):
         file = Path(filename)
         file.touch()
 
-        return cls(filename, provider, pool)
+        return cls(filename, provider, pool, loop)
 
     def add(self, entry:Union[str, list]):
         entries = entry if isinstance(entry, list) else [entry]
@@ -68,9 +68,10 @@ class Playlist():
         self.list[key] = ret[0]
 
     async def get_entries(self) -> Sequence[EntryOverview]:
-        unresolved = [k for k, v in self.list.items() if not v]
-        await asyncio.wait([self.fill_resolve(item) for item in unresolved], return_when=asyncio.ALL_COMPLETED)
-        return list(self.list.values())
+        unresolved = [self.fill_resolve(k) for k, v in self.list.items() if not v]
+        if unresolved:
+            await asyncio.wait(unresolved, return_when=asyncio.ALL_COMPLETED)
+        return [item for item in self.list.values() if item]
 
     async def load_file(self):
         await self.loop.run_in_executor(self.pool, self.do_load_file)
@@ -99,9 +100,9 @@ class Playlist():
             log.error(f'Failed to save playlist to file {file}: ', exc_info=True)
 
 class PlaylistManager():
-    def __init__(self, provider_manager, playlists_dir:str=None):
+    def __init__(self, config, provider_manager):
         self.prov = provider_manager
-        self.playlists_dir = playlists_dir or 'playlists'
+        self.playlists_dir = config.playlists_dir
         self.loop = asyncio.get_event_loop()
         self.pool = ThreadPoolExecutor(max_workers=4)
 
@@ -115,11 +116,13 @@ class PlaylistManager():
 
     def do_load_playlists(self):
         pl_dir = Path(self.playlists_dir)
+        log.debug(f'loading {pl_dir}')
         try:
             pl_dir.mkdir(exist_ok=True)
             for file in pl_dir.glob('*.aria'):
+                log.info(f'Loading playlist {file}')
                 try:
-                    self.lists[file.stem] = Playlist(file, self.prov, self.pool)
+                    self.lists[file.stem] = Playlist(file, self.prov, self.pool, self.loop)
                 except:
                     log.error(f'Failed to initialize playlist {file.stem}: ', exc_info=True)
         except:
@@ -133,8 +136,8 @@ class PlaylistManager():
         return self.lists.get(name)
 
     async def create(self, name:str):
-        if not name in self.lists.keys:
+        if not name in self.lists.keys():
             self.lists[name] = await self.loop.run_in_executor(
                 self.pool,
-                partial(Playlist.create, f'{name}.txt', self.prov, self.pool)
+                partial(Playlist.create, Path(self.playlists_dir)/f'{name}.aria', self.prov, self.pool, self.loop)
             )

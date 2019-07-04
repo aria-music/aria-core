@@ -1,6 +1,8 @@
 {
     "player_socket": "",
     "stream_socket": "",
+    "playlists_dir": "",
+    "cache_dir": "",
     "providers_config": {
         "youtube": {
             "api_key": ""

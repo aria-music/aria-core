@@ -16,6 +16,15 @@ class EntryOverview():
         self.thumbnail = thumbnail or ''
         self.entry = entry
 
+    def as_dict(self):
+        return {
+            "source": self.source,
+            "title": self.title,
+            "uri": self.uri,
+            "thumbnail": self.thumbnail,
+            "entry": self.entry
+        }
+
 
 class PlayableEntry():
     def __init__(self):

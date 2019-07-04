@@ -22,8 +22,8 @@ ytdl_params = {
 
 
 class YoutubeDLEntry(PlayableEntry):
-    def __init__(self, player, ytdl:'YTDLProvider', song:EntryOverview):
-        self.player = player
+    def __init__(self, cache_dir, ytdl:'YTDLProvider', song:EntryOverview):
+        self.cache_dir = Path(cache_dir)
         self.ytdl = ytdl
         self.entry = song
 
@@ -40,11 +40,14 @@ class YoutubeDLEntry(PlayableEntry):
         self.filename = await self.ytdl.download(self.uri)
         if self.filename:
             try:
-                Path(self.filename).rename(Path(self.player.cache_dir)/self.filename)
+                dest = Path(self.cache_dir)/self.filename
+                Path(self.filename).rename(dest)
+                self.filename = str(dest)
                 self.ready.set()
             except:
                 log.error('Moving file failed:\n', exc_info=True)
 
+        log.info(f'Downloaded: {self.filename}' if self.filename else 'Failed to download')
         # if not self.ready.is_set():
         #     self.player.cb_download_failed(self)
 
@@ -59,7 +62,8 @@ class YTDLProvider(Provider):
 
     async def resolve(self, uri) -> Sequence[EntryOverview]:
         try:
-            res = await self.loop.run_in_executor(self.loop, partial(self.ytdl.extract_info, uri, download=False))
+            res = await self.loop.run_in_executor(self.pool, partial(self.ytdl.extract_info, uri, download=False))
+            log.debug(res.get('extractor'))
         except:
             log.error('Failed to extract uri:\n', exc_info=True)
             return []
@@ -67,21 +71,27 @@ class YTDLProvider(Provider):
         ret = []
         if 'entries' in res:
             for entry in res['entries']:
+                if 'is_live' in entry and entry['is_live'] == True:
+                    continue
+
                 ret.append(EntryOverview(res['extractor'].split(':')[0],
                                          entry.get('title') or '',
                                          entry.get('webpage_url') or '',
                                          entry.get('thumbnail') or ''))
         else:
-            ret.append(EntryOverview(res['extractor'].split(':')[0],
-                                     res.get('title') or '',
-                                     res.get('webpage_url') or '',
-                                     res.get('thumbnail') or ''))
+            if 'is_live' in res and res['is_live'] == True:
+                pass
+            else:
+                ret.append(EntryOverview(res['extractor'].split(':')[0],
+                                        res.get('title') or '',
+                                        res.get('webpage_url') or '',
+                                        res.get('thumbnail') or ''))
 
         return ret
 
-    async def resolve_playable(self, uri, player) -> Sequence[YoutubeDLEntry]:
+    async def resolve_playable(self, uri, cache_dir) -> Sequence[YoutubeDLEntry]:
         resolved = await self.resolve(uri)
-        return [YoutubeDLEntry(player, self, song) for song in resolved]
+        return [YoutubeDLEntry(cache_dir, self, song) for song in resolved]
 
     async def download(self, uri):
         filename = None

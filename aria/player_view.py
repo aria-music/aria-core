@@ -18,17 +18,17 @@ class PlayerView():
         self.loop = asyncio.get_event_loop()
 
         self.manager = MediaSourceManager(self.config)
-        self.playlist = PlaylistManager(self.manager)
+        self.playlist = PlaylistManager(self.config, self.manager)
         self.player = Player(self.manager)
 
         self.connections = {}
 
     async def on_player_state_change(self):
-        state
-        await self.broadcast()
+        pass
+        # await self.broadcast()
 
     async def get_ws(self, request):
-        ws = web.WebSocketResponse()
+        ws = web.WebSocketResponse(heartbeat=30)
         await ws.prepare(request)
 
         key = generate_key()
@@ -38,7 +38,7 @@ class PlayerView():
         self.connections[key] = ws
         await ws.send_json(enclose_packet(key, 'hello'))
 
-        log.debug(f"Connected to {request.remote}")
+        log.debug("Connected!")
 
         async for msg in ws:
             if msg.type == WSMsgType.TEXT:
@@ -46,6 +46,8 @@ class PlayerView():
                     self.loop.create_task(self.handle_message(ws, msg.json()))
                 except:
                     log.error(f'Invalid message: {msg.data}')
+
+        return ws
 
     async def broadcast(self, packet):
         for conn in self.connections.values():
@@ -60,11 +62,11 @@ class PlayerView():
             log.error(f'Invalid op type. Expected str: {op}')
             return
         
-        if not isinstance(key, str) and op != 'hello':
+        if not isinstance(key, str) or key not in self.connections:
             log.error(f'Invalid key: {key}')
             return
 
-        handler = getattr(self, f'op_{op}', default=None)
+        handler = getattr(self, f'op_{op}', None)
         if not handler:
             log.error(f'No handler found for op {op}')
             return
@@ -131,7 +133,7 @@ class PlayerView():
             return
         
         ret = await self.manager.search(query, provider)
-        return enc('search', ret)
+        return enc('search', [item.as_dict() for item in ret])
         
     async def op_playlists(self, enc, data):
         """
@@ -191,7 +193,7 @@ class PlayerView():
 
         ret = {
             'name': name,
-            'entries': await pl.get_entries()
+            'entries': [item.as_dict() for item in await pl.get_entries()]
         }
         return enc('playlist', ret)
 
@@ -249,19 +251,19 @@ class PlayerView():
 
         pl.add(uri)
 
-    async def op_play(self, enc):
-        """
-        {
-            "op": "play",
-            "key": key
-        }
+    # async def op_play(self, enc):
+    #     """
+    #     {
+    #         "op": "play",
+    #         "key": key
+    #     }
 
-        Returns
-        -------
-        None
-        """
+    #     Returns
+    #     -------
+    #     None
+    #     """
 
-        await self.player.play()
+    #     await self.player.play()
 
     async def op_pause(self, enc):
         """
@@ -291,10 +293,10 @@ class PlayerView():
 
         await self.player.skip()
 
-    async def op_queue(self, enc, data):
+    async def op_play(self, enc, data):
         """
         {
-            "op": "queue",
+            "op": "play",
             "key": key,
             "data": {
                 "uri": string or [strings]
@@ -334,14 +336,14 @@ class PlayerView():
         """
 
         ret = {
-            'queue': self.player.list
+            'queue': [item.as_dict() for item in self.player.list]
         }
 
         return enc('list_queue', ret)
 
 def enclose_packet(key, res, data=None):
     return {
-        'res': res,
+        'type': res,
         'key': key,
         'data': data
     }

@@ -1,7 +1,12 @@
 import asyncio
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from logging import getLogger
-from aria.models import PlayableEntry, EntryOverview, PlayerState
 from typing import Sequence, Union
+
+from aria.models import EntryOverview, PlayableEntry, PlayerState
+from aria.stream import StreamPlayer
 
 log = getLogger(__name__)
 
@@ -17,6 +22,7 @@ class PlayerQueue():
     async def get_next(self):
         ret = None
         while True:
+            log.debug('looping')
             async with self.lock:
                 try:
                     ret = self.queue.popleft()
@@ -31,6 +37,11 @@ class PlayerQueue():
                     break
                 except:
                     continue
+        
+        try:
+            self.loop.create_task(self.prepare(self.queue[0]))
+        except:
+            pass
 
         return ret
 
@@ -67,42 +78,53 @@ class PlayerQueue():
 
 
 class Player():
-    def __init__(self, manager, stream):
+    def __init__(self, manager):
         self.prov = manager
-        self.stream = stream
+        self.stream = StreamPlayer(self)
         self.loop = asyncio.get_event_loop()
 
+        self.pool = ThreadPoolExecutor(max_workers=4)
         self.lock = asyncio.Lock()
-        self.state = PlayerState.PAUSED
+        self.state = PlayerState.STOPPED
         self.queue = PlayerQueue(self)
         self.current = None
 
     async def play(self):
-        if self.state == PlayerState.STOPPED:
-            async with self.lock:
-                to_play = await self.queue.get_next()
-                if not to_play:
-                    return
+        async with self.lock:
+            self.current = await self.queue.get_next()
+            if not self.current:
+                return
 
-                self.stream.
-
+            self.state = PlayerState.PLAYING
+            await self.loop.run_in_executor(self.pool, partial(self.stream.play, self.current.filename))
 
     async def pause(self):
-        pass
+        async with self.lock:
+            if self.state == PlayerState.PLAYING:
+                self.state = PlayerState.PAUSED
+                await self.loop.run_in_executor(self.pool, self.stream.pause)
 
     async def resume(self):
-        pass
+        async with self.lock:
+            if self.state == PlayerState.PAUSED:
+                self.state = PlayerState.PLAYING
+                await self.loop.run_in_executor(self.pool, self.stream.resume)
 
+    async def skip(self):
+        async with self.lock:
+            self.state = PlayerState.STOPPED
+            # await self.loop.run_in_executor(self.pool, self.stream.stop)
+            await self.play()
+
+    # TODO: do resolve in playqueue
     async def add_entry(self, uri):
-        entry = await self.prov.resolve_playable(uri, self)
+        entry = await self.prov.resolve_playable(uri)
         if entry:
             self.queue.add_entry(entry)
 
     @property
     def list(self):
         return self.queue.list
-
-    
 
     # Callbacks
 
@@ -111,10 +133,8 @@ class Player():
             self.loop.create_task(self.play())
 
     def on_play_finished(self):
-        """
-        Should be passed to StreamPlayer
-        """
-        pass
+        log.debug('Play finished!')
+        self.loop.create_task(self.play())
 
     def on_download_failed(self, entry:PlayableEntry):
         pass

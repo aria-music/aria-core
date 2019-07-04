@@ -35,9 +35,9 @@ class MediaSourceManager():
         provider = self.get_provider(uri)
         return (await provider.resolve(uri)) if provider else []
 
-    async def resolve_playable(self, uri, player) -> Sequence[PlayableEntry]:
+    async def resolve_playable(self, uri) -> Sequence[PlayableEntry]:
         provider = self.get_provider(uri)
-        return (await provider.resolve_playable(uri)) if provider else []
+        return (await provider.resolve_playable(uri, self.config.cache_dir)) if provider else []
 
     def get_provider(self, uri) -> Optional[Provider]:
         prefix = uri.split(':')[0]
@@ -51,10 +51,12 @@ class MediaSourceManager():
     async def search(self, query, provider=None) -> Sequence['EntryOverview']:
         tophits = []
         items = []
-        single_provider = self.providers.get(provider)
-        if not single_provider:
-            log.error(f'Provider `{provider}` not found.')
-            return []
+        single_provider = None
+        if provider:
+            single_provider = self.providers.get(provider)
+            if not single_provider:
+                log.error(f'Provider `{provider}` not found.')
+                return []
 
         results, pending = await asyncio.wait([prov.search(query) for prov in single_provider or self.providers.values()],
                                               timeout=10, return_when=asyncio.ALL_COMPLETED)

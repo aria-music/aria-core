@@ -18,8 +18,8 @@ log = getLogger(__name__)
 
 
 class GPMEntry(PlayableEntry):
-    def __init__(self, player, gpm:'GPMProvider', song:Union[GPMSong, EntryOverview]):
-        self.player = player
+    def __init__(self, cache_dir, gpm:'GPMProvider', song:Union[GPMSong, EntryOverview]):
+        self.cache_dir = Path(cache_dir)
         self.gpm = gpm
         self.entry = song if isinstance(song, EntryOverview) else self.gpm.enclose_entry(song)
 
@@ -27,7 +27,7 @@ class GPMEntry(PlayableEntry):
         self.uri = self.entry.uri
         self.song_id = uri_to_id(self.uri)
         self.thumbnail = self.entry.thumbnail
-        self.filename = f'{self.gpm.name}-{self.song_id}.mp3'
+        self.filename = str(self.cache_dir/f'{self.gpm.name}-{self.song_id}.mp3')
         
         self.process = False
         self.ready = asyncio.Event()
@@ -43,6 +43,8 @@ class GPMEntry(PlayableEntry):
                 self.ready.set()
             except:
                 log.error('Failed to download:\n', exc_info=True)
+
+        log.info(f'Downloaded: {self.filename}' if self.filename else 'Failed to download')
         
         # if not self.ready:
         #     self.player.cb_download_failed()
@@ -71,6 +73,7 @@ class GPMProvider(Provider):
             log.error(f'Failed to login. Try authorize using `google_login.py`.')
 
         self.loop.create_task(self.update(force=True))
+        # self.update_lock.clear()
 
     async def resolve(self, uri:str) -> Sequence[EntryOverview]:
         try:
@@ -92,9 +95,9 @@ class GPMProvider(Provider):
 
         return [self.enclose_entry(song)] if song else []
 
-    async def resolve_playable(self, uri:str, player) -> Sequence[GPMEntry]:
+    async def resolve_playable(self, uri:str, cache_dir) -> Sequence[GPMEntry]:
         resolved = await self.resolve(uri)
-        return [GPMEntry(player, self, song) for song in resolved]
+        return [GPMEntry(cache_dir, self, song) for song in resolved]
 
     async def search(self, keyword:str) -> Sequence[EntryOverview]:
         await self.update_lock.wait()
@@ -104,7 +107,7 @@ class GPMProvider(Provider):
         except:
             log.error('Failed to search:\n', exc_info=True)
 
-        return [self.enclose_entry(entry) for entry in ret]
+        return [self.enclose_entry(entry) for entry in ret[:50]]
 
     async def update(self, force=False):
         if not force and not self.update_lock.is_set():
@@ -152,7 +155,7 @@ class GPMProvider(Provider):
         if not ret:
             raise GPMError()
 
-        self.loop.run_in_executor(self.loop, partial(save_file, filename, ret))
+        self.loop.run_in_executor(self.pool, partial(save_file, filename, ret))
 
     def enclose_entry(self, entry:GPMSong) -> EntryOverview:
         title = f'{entry.title} - {entry.artist}'

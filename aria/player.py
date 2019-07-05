@@ -22,21 +22,25 @@ class PlayerQueue():
     async def get_next(self):
         ret = None
         while True:
-            log.debug('looping')
+            ret = None
+            log.debug('Looking for next entry...')
             async with self.lock:
                 try:
                     ret = self.queue.popleft()
                 except:
-                    pass
-            
-            if not ret:
-                break
-            if not ret.ready.is_set():
-                try:
-                    await asyncio.wait_for(ret.ready.wait(), 10) # FIXME
+                    log.error('No entry.')
                     break
+            
+            if not ret.end.is_set():
+                log.info('Entry is not ready. Waiting...')
+                try:
+                    await asyncio.wait_for(ret.end.wait(), 10)
                 except:
+                    log.error('Download timed out. Skip.', exc_info=True)
                     continue
+            
+            if ret.is_ready():
+                break
         
         try:
             self.loop.create_task(self.prepare(self.queue[0]))
@@ -63,13 +67,14 @@ class PlayerQueue():
             pass
 
     async def prepare(self, entry):
-        if not entry.process:
+        if not entry.start.is_set():
             try:
                 await asyncio.wait_for(entry.download(), 30)
             except:
                 log.error(f'Failed to download entry {entry.uri}: ', exc_info=True)
             finally:
-                if not entry.ready.is_set():
+                if not entry.is_ready():
+                    log.info('Entry not ready. Delete.')
                     self.remove_entry(entry)
         
     @property
@@ -114,7 +119,7 @@ class Player():
         async with self.lock:
             self.state = PlayerState.STOPPED
             # await self.loop.run_in_executor(self.pool, self.stream.stop)
-            await self.play()
+            self.loop.create_task(self.play())
 
     # TODO: do resolve in playqueue
     async def add_entry(self, uri):
@@ -133,8 +138,13 @@ class Player():
             self.loop.create_task(self.play())
 
     def on_play_finished(self):
-        log.debug('Play finished!')
-        self.loop.create_task(self.play())
+        self.loop.create_task(self.do_on_play_finished())
+
+    async def do_on_play_finished(self):
+        async with self.lock:
+            self.state = PlayerState.STOPPED
+            log.debug('Play finished!')
+            self.loop.create_task(self.play())
 
     def on_download_failed(self, entry:PlayableEntry):
         pass

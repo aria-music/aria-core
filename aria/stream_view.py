@@ -29,7 +29,7 @@ class StreamView():
         # don't need lock since sending to closed ws and raising exception is no matter
         while True:
             self.connections = [ws for ws in self.connections if not ws.closed]
-            log.debug(f'Stream holding {len(self.connections)} connections')
+            # log.debug(f'Stream holding {len(self.connections)} connections')
             sleep(1) # roughly
 
     async def get_ws(self, request):

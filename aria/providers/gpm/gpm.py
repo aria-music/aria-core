@@ -29,25 +29,28 @@ class GPMEntry(PlayableEntry):
         self.thumbnail = self.entry.thumbnail
         self.filename = str(self.cache_dir/f'{self.gpm.name}-{self.song_id}.mp3')
         
-        self.process = False
-        self.ready = asyncio.Event()
+        self.start = asyncio.Event()
+        self.end = asyncio.Event()
 
     async def download(self):
-        self.process = True
+        self.start.set()
+
         if Path(self.filename).is_file():
             log.info(f'Already downloaded: {self.filename}')
-            self.ready.set()
         else:
             try:
                 await self.gpm.download(uri_to_id(self.uri), self.filename)
-                self.ready.set()
+                log.info(f'Downloaded: {self.filename}')
             except:
                 log.error('Failed to download:\n', exc_info=True)
 
-        log.info(f'Downloaded: {self.filename}' if self.filename else 'Failed to download')
-        
         # if not self.ready:
         #     self.player.cb_download_failed()
+
+        self.end.set()
+
+    def is_ready(self):
+        return Path(self.filename).exists()
 
 
 class GPMProvider(Provider):

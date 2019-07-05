@@ -22,7 +22,7 @@ ytdl_params = {
 
 
 class YoutubeDLEntry(PlayableEntry):
-    def __init__(self, cache_dir, ytdl:'YTDLProvider', song:EntryOverview):
+    def __init__(self, cache_dir, ytdl:'YTDLProvider', song:EntryOverview, filename=None):
         self.cache_dir = Path(cache_dir)
         self.ytdl = ytdl
         self.entry = song
@@ -30,27 +30,38 @@ class YoutubeDLEntry(PlayableEntry):
         self.title = self.entry.title
         self.uri = self.entry.uri
         self.thumbnail = self.entry.thumbnail
+        self.expected_filename = (self.cache_dir/filename) if filename else None
         self.filename = None
     
-        self.process = False
-        self.ready = asyncio.Event()
+        self.start = asyncio.Event()
+        self.end = asyncio.Event()
 
     async def download(self):
-        self.process = True
-        self.filename = await self.ytdl.download(self.uri)
-        if self.filename:
+        self.start.set()
+        log.debug(f'looking for caches: {str(self.expected_filename)}')
+        if self.expected_filename and self.expected_filename.exists():
+                self.filename = str(self.expected_filename)
+                log.info(f'Use cached: {self.expected_filename}')
+        else:
             try:
-                dest = Path(self.cache_dir)/self.filename
-                Path(self.filename).rename(dest)
+                filename = await self.ytdl.download(self.uri)
+                dest = Path(self.cache_dir)/filename
+                Path(filename).rename(dest)
                 self.filename = str(dest)
-                self.ready.set()
+                log.info(f'Downloaded: {self.filename}')
             except:
                 log.error('Moving file failed:\n', exc_info=True)
 
-        log.info(f'Downloaded: {self.filename}' if self.filename else 'Failed to download')
         # if not self.ready.is_set():
         #     self.player.cb_download_failed(self)
+        self.end.set()
 
+    def is_ready(self):
+        if self.filename:
+            return Path(self.filename).exists()
+        else:
+            return False
+            
 
 class YTDLProvider(Provider):
     resolve_prefixes = ['http', 'https']
@@ -77,7 +88,8 @@ class YTDLProvider(Provider):
                 ret.append(EntryOverview(res['extractor'].split(':')[0],
                                          entry.get('title') or '',
                                          entry.get('webpage_url') or '',
-                                         entry.get('thumbnail') or ''))
+                                         entry.get('thumbnail') or '',
+                                         entry))
         else:
             if 'is_live' in res and res['is_live'] == True:
                 pass
@@ -85,13 +97,22 @@ class YTDLProvider(Provider):
                 ret.append(EntryOverview(res['extractor'].split(':')[0],
                                         res.get('title') or '',
                                         res.get('webpage_url') or '',
-                                        res.get('thumbnail') or ''))
+                                        res.get('thumbnail') or '',
+                                        res))
 
         return ret
 
     async def resolve_playable(self, uri, cache_dir) -> Sequence[YoutubeDLEntry]:
         resolved = await self.resolve(uri)
-        return [YoutubeDLEntry(cache_dir, self, song) for song in resolved]
+        ret = []
+        for song in resolved:
+            try:
+                filename = await self.loop.run_in_executor(self.pool, partial(self.ytdl.prepare_filename, song.entry))
+                log.debug(f'Expected filename: {filename}')
+                ret.append(YoutubeDLEntry(cache_dir, self, song, filename))
+            except:
+                log.error('Failed to generate filename:', exc_info=True)
+        return ret
 
     async def download(self, uri):
         filename = None

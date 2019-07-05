@@ -279,6 +279,9 @@ class PlayerView():
 
         await self.player.pause()
 
+    async def op_resume(self, enc):
+        await self.player.resume()
+
     async def op_skip(self, enc):
         """
         {

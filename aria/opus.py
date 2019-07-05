@@ -230,7 +230,7 @@ class Encoder:
         self.set_vbr(0)
         # self.set_bitrate(128)
         # self.set_fec(True)
-        self.set_expected_packet_loss_percent(1)
+        self.set_expected_packet_loss_percent(1.00)
         self.set_bandwidth('full')
         self.set_signal_type('auto')
 

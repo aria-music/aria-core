@@ -30,11 +30,11 @@ class Playlist():
 
         return cls(filename, provider, pool, loop)
 
-    def add(self, entry:Union[str, list]):
+    def add(self, entry:Union[Sequence[EntryOverview], EntryOverview]):
         entries = entry if isinstance(entry, list) else [entry]
 
         for item in entries:
-            stripped = item.strip()
+            stripped = item.uri.strip()
             if stripped and stripped not in self.list.keys():
                 self.list[stripped] = None
         
@@ -107,9 +107,11 @@ class PlaylistManager():
         self.pool = ThreadPoolExecutor(max_workers=4)
 
         self.lists = {}
+        self.likes = None # special playlist
 
         # self.loop.create_task(self.load_playlists())
         self.do_load_playlists()
+        self.init_likes()
 
     async def load_playlists(self):
         await self.loop.run_in_executor(self.pool, self.do_load_playlists)
@@ -127,6 +129,12 @@ class PlaylistManager():
                     log.error(f'Failed to initialize playlist {file.stem}: ', exc_info=True)
         except:
             log.error('Failed to initialize playlists: ', exc_info=True)
+
+    def init_likes(self):
+        pass
+        # self.likes = self.get_playlist('Likes')
+        # if not self.likes:
+        #     self.
         
     @property
     def list(self):

@@ -1,8 +1,7 @@
 import asyncio
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
-from functools import partial
 from logging import getLogger
+from random import shuffle
 from typing import Sequence, Union
 
 from aria.models import EntryOverview, PlayableEntry, PlayerState
@@ -14,6 +13,7 @@ log = getLogger(__name__)
 class PlayerQueue():
     def __init__(self, player):
         self.player = player
+        self.on_queue_change = self.player.view.on_queue_change
 
         self.loop = asyncio.get_event_loop()
         self.queue = deque()
@@ -47,24 +47,35 @@ class PlayerQueue():
         except:
             pass
 
+        self.on_queue_change()
         return ret
 
-    def add_entry(self, entries:Union[Sequence[PlayableEntry], PlayableEntry], head=False):
+    async def add_entry(self, entries:Union[Sequence[PlayableEntry], PlayableEntry], head=False):
         to_add = entries if isinstance(entries, list) else [entries]
-        if head:
-            self.queue.extendleft(to_add[::-1])
-        else:
-            self.queue.extend(to_add)
+        async with self.lock:
+            if head:
+                self.queue.extendleft(to_add[::-1])
+            else:
+                self.queue.extend(to_add)
 
         self.loop.create_task(self.prepare(self.queue[0]))
         self.player.on_entry_added()
+        self.on_queue_change()
 
-    def remove_entry(self, entry):
-        try:
-            self.queue.remove(entry)
-            self.loop.create_task(self.prepare(self.queue[0]))
-        except:
-            pass
+    async def remove_entry(self, entry):
+        async with self.lock:
+            try:
+                self.queue.remove(entry)
+                self.loop.create_task(self.prepare(self.queue[0]))
+                self.on_queue_change()
+            except:
+                pass
+
+    async def clear(self):
+        async with self.lock:
+            self.queue.clear()
+
+        self.on_queue_change()
 
     async def prepare(self, entry):
         if not entry.start.is_set():
@@ -75,7 +86,21 @@ class PlayerQueue():
             finally:
                 if not entry.is_ready():
                     log.info('Entry not ready. Delete.')
-                    self.remove_entry(entry)
+                    await self.remove_entry(entry)
+
+    async def shuffle(self):
+        # random access to deque is slow:
+        # https://bugs.python.org/issue4123
+        # so we convert queue to list and shuffle
+        # then revert list back to deque
+        async with self.lock:
+            pq = list(self.queue)
+            shuffle(pq)
+            self.queue = deque(pq)
+            if len(self.queue):
+                self.loop.create_task(self.prepare(self.queue[0]))
+
+        self.on_queue_change()
         
     @property
     def list(self) -> Sequence[EntryOverview]:
@@ -83,12 +108,12 @@ class PlayerQueue():
 
 
 class Player():
-    def __init__(self, manager):
+    def __init__(self, view, manager):
+        self.view = view
         self.prov = manager
         self.stream = StreamPlayer(self)
         self.loop = asyncio.get_event_loop()
 
-        self.pool = ThreadPoolExecutor(max_workers=4)
         self.lock = asyncio.Lock()
         self.state = PlayerState.STOPPED
         self.queue = PlayerQueue(self)
@@ -100,24 +125,24 @@ class Player():
             if not self.current:
                 return
 
-            self.state = PlayerState.PLAYING
-            await self.loop.run_in_executor(self.pool, partial(self.stream.play, self.current.filename))
+            self.change_state('playing')
+            self.stream.play(self.current.filename)
 
     async def pause(self):
         async with self.lock:
             if self.state == PlayerState.PLAYING:
-                self.state = PlayerState.PAUSED
-                await self.loop.run_in_executor(self.pool, self.stream.pause)
+                self.change_state('paused')
+                self.stream.pause()
 
     async def resume(self):
         async with self.lock:
             if self.state == PlayerState.PAUSED:
-                self.state = PlayerState.PLAYING
-                await self.loop.run_in_executor(self.pool, self.stream.resume)
+                self.change_state('playing')
+                self.stream.resume()
 
     async def skip(self):
         async with self.lock:
-            self.state = PlayerState.STOPPED
+            self.change_state('stopped')
             # await self.loop.run_in_executor(self.pool, self.stream.stop)
             self.loop.create_task(self.play())
 
@@ -125,17 +150,32 @@ class Player():
     async def add_entry(self, uri):
         entry = await self.prov.resolve_playable(uri)
         if entry:
-            self.queue.add_entry(entry)
+            await self.queue.add_entry(entry)
 
     @property
     def list(self):
         return self.queue.list
 
+    def change_state(self, state_to:str):
+        # MUST BE CALLED WITH LOCK ACQUIRED!!!
+        self.state = PlayerState[state_to.upper()]
+        self.view.on_player_state_change()        
+
+    def enclose_state(self):
+        return {
+            'state': self.state.name.lower(),
+            'entry': self.current.entry if not self.state == PlayerState.STOPPED else None
+        }
+
     # Callbacks
 
     def on_entry_added(self):
-        if self.state == PlayerState.STOPPED:
-            self.loop.create_task(self.play())
+        self.loop.create_task(self.do_on_entry_added())
+
+    async def do_on_entry_added(self):
+        async with self.lock:
+            if self.state == PlayerState.STOPPED:
+                self.loop.create_task(self.play()) # don't await or you got DEADLOCK
 
     def on_play_finished(self):
         self.loop.create_task(self.do_on_play_finished())
@@ -145,6 +185,3 @@ class Player():
             self.state = PlayerState.STOPPED
             log.debug('Play finished!')
             self.loop.create_task(self.play())
-
-    def on_download_failed(self, entry:PlayableEntry):
-        pass

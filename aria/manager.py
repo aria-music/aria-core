@@ -23,21 +23,33 @@ class MediaSourceManager():
             
             try:
                 ins = provider(**config) if config else provider()
-                if name:
+                if ins.can_search:
                     self.providers[name] = ins
                 for prefix in prefixes:
                     self.resolvers[prefix] = ins
                 log.info(f'Initialized provider `{name}`')
             except:
-                log.error(f'Failed to initialize provider `{name}`:\n', exc_info=True)
+                log.error(f'Failed to initialize provider `{name}`:', exc_info=True)
 
     async def resolve(self, uri) -> Sequence[EntryOverview]:
         provider = self.get_provider(uri)
         return (await provider.resolve(uri)) if provider else []
 
     async def resolve_playable(self, uri) -> Sequence[PlayableEntry]:
-        provider = self.get_provider(uri)
-        return (await provider.resolve_playable(uri, self.config.cache_dir)) if provider else []
+        uris = uri if isinstance(uri, list) else [uri]
+        solvers = []
+        ret = []
+        for uri in uris:
+            provider = self.get_provider(uri)
+            if provider:
+                solvers.append(provider.resolve_playable(uri, self.config.cache_dir))
+
+        res, _ = await asyncio.wait(solvers, return_when=asyncio.ALL_COMPLETED)
+        for item in res:
+            resolved = await item
+            ret += resolved
+        
+        return ret
 
     def get_provider(self, uri) -> Optional[Provider]:
         prefix = uri.split(':')[0]
@@ -53,7 +65,7 @@ class MediaSourceManager():
         items = []
         single_provider = None
         if provider:
-            single_provider = self.providers.get(provider)
+            single_provider = [self.providers.get(provider)]
             if not single_provider:
                 log.error(f'Provider `{provider}` not found.')
                 return []
@@ -67,6 +79,6 @@ class MediaSourceManager():
                 tophits += search_res[0:2]
                 items += search_res[2:]
             except:
-                log.error('Search failed in provider:\n', exc_info=True)
+                log.error('Search failed in provider: ', exc_info=True)
             
         return tophits + items

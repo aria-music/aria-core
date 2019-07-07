@@ -42,10 +42,7 @@ class GPMEntry(PlayableEntry):
                 await self.gpm.download(uri_to_id(self.uri), self.filename)
                 log.info(f'Downloaded: {self.filename}')
             except:
-                log.error('Failed to download:\n', exc_info=True)
-
-        # if not self.ready:
-        #     self.player.cb_download_failed()
+                log.error('Failed to download: ', exc_info=True)
 
         self.end.set()
 
@@ -56,6 +53,7 @@ class GPMEntry(PlayableEntry):
 class GPMProvider(Provider):
     name = 'gpm'
     resolve_prefixes = ['gpm']
+    can_search = True
 
     def __init__(self, *, credfile=None):
         self.credfile = credfile or 'config/google.auth'
@@ -94,7 +92,7 @@ class GPMProvider(Provider):
         try:
             song = await self.store.resolve(track_id)
         except:
-            log.error(f'DB failed:\n', exc_info=True)
+            log.error(f'DB failed: ', exc_info=True)
 
         return [self.enclose_entry(song)] if song else []
 
@@ -108,7 +106,7 @@ class GPMProvider(Provider):
         try:
             ret = await self.store.search(keyword)
         except:
-            log.error('Failed to search:\n', exc_info=True)
+            log.error('Failed to search: ', exc_info=True)
 
         return [self.enclose_entry(entry) for entry in ret[:50]]
 
@@ -144,7 +142,7 @@ class GPMProvider(Provider):
         try:
             mp3 = await self.loop.run_in_executor(self.pool, partial(self.gpm.get_stream_url, song_id, quality='med'))
         except:
-            log.error('Failed to get audio file:\n', exc_info=True)
+            log.error('Failed to get audio file: ', exc_info=True)
 
         return mp3
 
@@ -158,7 +156,7 @@ class GPMProvider(Provider):
         if not ret:
             raise GPMError()
 
-        self.loop.run_in_executor(self.pool, partial(save_file, filename, ret))
+        await self.loop.run_in_executor(self.pool, partial(save_file, filename, ret))
 
     def enclose_entry(self, entry:GPMSong) -> EntryOverview:
         title = f'{entry.title} - {entry.artist}'

@@ -12,6 +12,7 @@ log = getLogger(__name__)
 
 class YoutubeProvider(Provider):
     name = 'youtube'
+    can_search = True
 
     endpoint = 'https://www.googleapis.com/youtube/v3/search'
     default_params = {
@@ -43,11 +44,14 @@ class YoutubeProvider(Provider):
                     title = item['snippet']['title']
                     thumbnail = item['snippet']['thumbnails']['high']['url']
                 except:
-                    log.error('missing key:\n', exc_info=True)
+                    log.error('missing key: ', exc_info=True)
                 
                 ret.append(EntryOverview(self.name, title, f'https://www.youtube.com/watch?v={video_id}', thumbnail, None))
 
         return ret
+    async def resolve_playable(self, uri, cache_dir):
+        # search-only provider
+        return
 
     async def resolve(self, uri:str) -> Optional[EntryOverview]:
         # search-only provider
@@ -60,6 +64,6 @@ class YoutubeProvider(Provider):
                 ret = await res.json()
                 log.debug(ret)
         except:
-            log.error(f'Failed to communicate with YouTube API ({params}):\n', exc_info=True)
+            log.error(f'Failed to communicate with YouTube API ({params}): ', exc_info=True)
 
         return ret

@@ -22,6 +22,7 @@ class StreamPlayer():
 
     # These control command must be runned **synchronously** 
     def play(self, file:Union[str, Path]):
+        self.is_paused = True
         file = file if isinstance(file, str) else str(file)
         self.ffmpeg.create(file)
         sleep(0.5) # Ensure ffmpeg start decoding
@@ -46,6 +47,7 @@ class StreamPlayer():
         self.is_paused = False
 
     def stop(self):
+        self.is_paused = True
         self.ffmpeg.kill()
 
     def play_finished(self):

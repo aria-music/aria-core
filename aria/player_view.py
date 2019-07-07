@@ -1,13 +1,16 @@
 import asyncio
-from aiohttp import web, WSMsgType
-from logging import getLogger
 from functools import partial
 from inspect import signature
+from logging import getLogger
+from threading import Thread
+from time import sleep
 
-from .utils import generate_key
+from aiohttp import WSMsgType, web
+
 from aria.manager import MediaSourceManager
-from aria.playlist import PlaylistManager
 from aria.player import Player
+from aria.playlist import PlaylistManager
+from aria.utils import generate_key, json_dump
 
 log = getLogger(__name__)
 
@@ -19,13 +22,16 @@ class PlayerView():
 
         self.manager = MediaSourceManager(self.config)
         self.playlist = PlaylistManager(self.config, self.manager)
-        self.player = Player(self.manager)
+        self.player = Player(self, self.manager)
 
         self.connections = {}
+        self.refresh_thread = Thread(target=self.refresh_connections)
+        self.refresh_thread.start()
 
-    async def on_player_state_change(self):
-        pass
-        # await self.broadcast()
+    def refresh_connections(self):
+        while True:
+            self.connections = {k: v for k, v in self.connections.items() if not v.closed}
+            sleep(1)
 
     async def get_ws(self, request):
         ws = web.WebSocketResponse(heartbeat=30)
@@ -36,7 +42,9 @@ class PlayerView():
             key = generate_key()
 
         self.connections[key] = ws
-        await ws.send_json(enclose_packet(key, 'hello'))
+        await send_json(ws, enclose_packet('hello', key=key))
+        await send_json(ws, enclose_packet('event_queue_change', {'queue': self.player.list}))
+        await send_json(ws, enclose_packet('event_player_state_change', self.player.enclose_state()))
 
         log.debug("Connected!")
 
@@ -50,8 +58,9 @@ class PlayerView():
         return ws
 
     async def broadcast(self, packet):
-        for conn in self.connections.values():
-            await conn.send_json(packet)
+        log.debug(f'Broadcasting: {packet}')
+        for ws in self.connections.values():
+            await send_json(ws, packet)
 
     async def handle_message(self, ws, payload: dict):
         op = payload.get('op')
@@ -71,7 +80,6 @@ class PlayerView():
             log.error(f'No handler found for op {op}')
             return
 
-        encloser = partial(enclose_packet, key)
         reqs = signature(handler).parameters
         params = {}
 
@@ -81,13 +89,38 @@ class PlayerView():
             params['key'] = key
         if 'data' in reqs:
             params['data'] = data
+        if 'pre' in reqs:
+            params['pre'] = partial(enclose_packet, key=key)
 
         log.debug(f'Handling op {op} with data {data}')
-        ret = await handler(encloser, **params)
+        ret = await handler(**params)
         if ret:
-            await ws.send_json(ret)
+            log.debug(f'Returning {ret}')
+            await send_json(ws, ret)
 
-    async def op_search(self, enc, data):
+        log.info(f'task op {op} done.')
+    
+    # Event callbacks
+    # Better using EventEmitter?
+    
+    def on_player_state_change(self):
+        log.debug('State changed. Broadcasting...')
+        self.loop.create_task(self.event_player_state_change())
+
+    async def event_player_state_change(self):
+        await self.broadcast(enclose_packet('event_player_state_change', self.player.enclose_state()))
+
+    def on_queue_change(self):
+        log.debug('Queue changed. Broadcasting...')
+        self.loop.create_task(self.event_queue_change())
+
+    async def event_queue_change(self):
+        ret = {
+            'queue': self.player.list
+        }
+        await self.broadcast(enclose_packet('event_queue_change', ret))
+
+    async def op_search(self, data):
         """
         {
             "op": "search",
@@ -133,9 +166,9 @@ class PlayerView():
             return
         
         ret = await self.manager.search(query, provider)
-        return enc('search', [item.as_dict() for item in ret])
+        return enclose_packet('search', ret)
         
-    async def op_playlists(self, enc, data):
+    async def op_playlists(self):
         """
         {
             "op": "playlists",
@@ -157,9 +190,9 @@ class PlayerView():
         ret = {
             'playlists': self.playlist.list
         }
-        return enc('playlists', ret)
+        return enclose_packet('playlists', ret)
 
-    async def op_playlist(self, enc, data):
+    async def op_playlist(self, data):
         """
         {
             "op": "playlist",
@@ -193,11 +226,11 @@ class PlayerView():
 
         ret = {
             'name': name,
-            'entries': [item.as_dict() for item in await pl.get_entries()]
+            'entries': await pl.get_entries()
         }
-        return enc('playlist', ret)
+        return enclose_packet('playlist', ret)
 
-    async def op_create_playlist(self, enc, data):
+    async def op_create_playlist(self, data):
         """
         {
             "op": "create_playlist",
@@ -218,7 +251,7 @@ class PlayerView():
 
         await self.playlist.create(name)
 
-    async def op_add_to_playlist(self, enc, data):
+    async def op_add_to_playlist(self, data):
         """
         {
             "op": "add_to_playlist",
@@ -249,23 +282,28 @@ class PlayerView():
             log.error(f'No playlist found for {name}')
             return
 
-        pl.add(uri)
+        resolved = await self.manager.resolve(uri)
+        pl.add(resolved)
 
-    # async def op_play(self, enc):
-    #     """
-    #     {
-    #         "op": "play",
-    #         "key": key
-    #     }
+    async def op_play(self, data):
+        """
+        {
+            "op": "play",
+            "key": key,
+            "data": {
+                "uri": [] or str
+            }
+        }
 
-    #     Returns
-    #     -------
-    #     None
-    #     """
+        Returns
+        -------
+        None
+        """
+        await self.player.queue.clear()
+        await self.op_queue(data)
+        await self.player.skip()
 
-    #     await self.player.play()
-
-    async def op_pause(self, enc):
+    async def op_pause(self):
         """
         {
             "op": "pause",
@@ -279,10 +317,10 @@ class PlayerView():
 
         await self.player.pause()
 
-    async def op_resume(self, enc):
+    async def op_resume(self):
         await self.player.resume()
 
-    async def op_skip(self, enc):
+    async def op_skip(self):
         """
         {
             "op": "skip",
@@ -296,10 +334,10 @@ class PlayerView():
 
         await self.player.skip()
 
-    async def op_play(self, enc, data):
+    async def op_queue(self, data):
         """
         {
-            "op": "play",
+            "op": "queue",
             "key": key,
             "data": {
                 "uri": string or [strings]
@@ -317,8 +355,17 @@ class PlayerView():
             return
 
         await self.player.add_entry(uri)
+    
+    async def op_state(self):
+        return enclose_packet('state', self.player.enclose_state())
 
-    async def op_list_queue(self, enc):
+    async def op_shuffle(self):
+        await self.player.queue.shuffle()
+
+    async def op_clear_queue(self):
+        await self.player.queue.clear()
+
+    async def op_list_queue(self):
         """
         {
             "op": "list_queue",
@@ -342,11 +389,18 @@ class PlayerView():
             'queue': [item.as_dict() for item in self.player.list]
         }
 
-        return enc('list_queue', ret)
+        return enclose_packet('list_queue', ret)
 
-def enclose_packet(key, res, data=None):
-    return {
-        'type': res,
-        'key': key,
-        'data': data
+def enclose_packet(type, data=None, key=None):
+    ret = {
+        'type': type
     }
+    if key:
+        ret['key'] = key
+    if data:
+        ret['data'] = data
+    
+    return ret
+
+async def send_json(ws, json):
+    await ws.send_json(json, dumps=json_dump)

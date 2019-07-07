@@ -22,7 +22,7 @@ class EntryOverview():
             "title": self.title,
             "uri": self.uri,
             "thumbnail": self.thumbnail,
-            "entry": self.entry
+            "entry": self.entry if self.source == 'gpm' else None # temporary
         }
 
 
@@ -37,10 +37,14 @@ class PlayableEntry():
 
 
 class Provider():
-    name:Optional[str] = None
+    name:str = '__base__'
     resolve_prefixes:Optional[Sequence[str]] = None
+    can_search:bool = False
 
     async def search(self, query:str) -> Sequence[EntryOverview]:
+        raise NotImplementedError()
+
+    async def resolve_playable(self, uri:str, cache_dir:str):
         raise NotImplementedError()
 
     async def resolve(self, uri:str) -> Sequence[EntryOverview]:

@@ -50,10 +50,8 @@ class YoutubeDLEntry(PlayableEntry):
                 self.filename = str(dest)
                 log.info(f'Downloaded: {self.filename}')
             except:
-                log.error('Moving file failed:\n', exc_info=True)
+                log.error('Moving file failed: ', exc_info=True)
 
-        # if not self.ready.is_set():
-        #     self.player.cb_download_failed(self)
         self.end.set()
 
     def is_ready(self):
@@ -64,6 +62,7 @@ class YoutubeDLEntry(PlayableEntry):
             
 
 class YTDLProvider(Provider):
+    name = 'ytdl'
     resolve_prefixes = ['http', 'https']
 
     def __init__(self):
@@ -76,7 +75,7 @@ class YTDLProvider(Provider):
             res = await self.loop.run_in_executor(self.pool, partial(self.ytdl.extract_info, uri, download=False))
             log.debug(res.get('extractor'))
         except:
-            log.error('Failed to extract uri:\n', exc_info=True)
+            log.error('Failed to extract uri: ', exc_info=True)
             return []
         
         ret = []
@@ -120,7 +119,7 @@ class YTDLProvider(Provider):
             res = await self.loop.run_in_executor(self.pool, partial(self.ytdl.extract_info, uri, download=True))
             filename = await self.loop.run_in_executor(self.pool, partial(self.ytdl.prepare_filename, res))
         except:
-            log.error('Download failed. YoutubeDL sucks:\n', exc_info=True)
+            log.error('Download failed. YoutubeDL sucks: ', exc_info=True)
         
         return filename
 

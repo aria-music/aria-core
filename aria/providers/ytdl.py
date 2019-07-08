@@ -18,6 +18,7 @@ ytdl_params = {
     'restrictfilenames': True,
     'noplaylist': True,
     'quiet': True,
+    'logtostderr': False
 }
 
 

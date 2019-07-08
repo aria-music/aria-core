@@ -22,7 +22,7 @@ class FFMpegPlayer():
                     '-ar', '48000',
                     '-ac', '2',
                     '-vn',
-                    '-loglevel', 'error',
+                    '-loglevel', 'quiet',
                     'pipe:1'
                 ],
                 stdout=subprocess.PIPE

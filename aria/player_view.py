@@ -235,7 +235,8 @@ class PlayerView():
             log.error('Invalid query.')
             return
         
-        ret = await self.manager.search(query, provider)
+        try_resolve = await self.manager.resolve(query)
+        ret = try_resolve or await self.manager.search(query, provider)
         return enclose_packet('search', ret)
         
     async def op_playlists(self):

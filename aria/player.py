@@ -225,7 +225,10 @@ class Player():
     def enclose_state(self):
         return {
             'state': self.state.name.lower(),
-            'entry': self.current.entry if not self.state == PlayerState.STOPPED else None
+            'entry': {
+                **self.current.entry.as_dict(),
+                'is_liked': self.view.playlist.is_liked(self.current.entry.uri)
+            } if not self.state == PlayerState.STOPPED else None
         }
 
     # Callbacks

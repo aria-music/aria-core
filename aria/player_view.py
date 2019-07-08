@@ -15,6 +15,41 @@ from aria.utils import generate_key, json_dump
 log = getLogger(__name__)
 
 
+"""
+APIs
+
+Events
+------
+event_player_state_change
+event_queue_change
+event_playlists_change
+event_playlist_entry_change
+
+Operations
+----------
+op_search (query, [provider])
+op_playlists
+op_playlist (name)
+op_create_playlist (name)
+op_add_to_playlist (name, uri)
+op_remove_from_playlist (name, uri)
+op_like (uri)
+op_play (uri, [playlist, head]) uri または playlist のどちらか必要
+op_pause
+op_resume
+op_skip
+op_skip_to (index, uri)
+op_queue (uri, [playlist, head]) uri または playlist のどちらか必要
+op_state
+op_shuffle
+op_repeat (uri, [count])
+op_clear_queue
+op_remove (uri, index)
+op_list_queue
+op_edit_queue (queue)
+"""
+
+
 class PlayerView():
     def __init__(self, config):
         self.config = config
@@ -336,6 +371,17 @@ class PlayerView():
             return
 
         pl.remove(uri)
+
+    async def op_like(self, data):
+        uri = data.get('uri')
+        if not uri:
+            log.error('uri not found in data')
+            return
+
+        if self.playlist.is_liked(uri):
+            self.playlist.dislike(uri)
+        else:
+            self.playlist.like(uri)
 
     async def op_play(self, data):
         """

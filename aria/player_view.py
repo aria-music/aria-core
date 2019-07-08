@@ -21,7 +21,7 @@ class PlayerView():
         self.loop = asyncio.get_event_loop()
 
         self.manager = MediaSourceManager(self.config)
-        self.playlist = PlaylistManager(self.config, self.manager)
+        self.playlist = PlaylistManager(self, self.config, self.manager)
         self.player = Player(self, self.manager)
 
         self.connections = {}
@@ -42,9 +42,9 @@ class PlayerView():
             key = generate_key()
 
         self.connections[key] = ws
-        await send_json(ws, enclose_packet('hello', key=key))
-        await send_json(ws, enclose_packet('event_queue_change', {'queue': self.player.list}))
-        await send_json(ws, enclose_packet('event_player_state_change', self.player.enclose_state()))
+
+        # initial events
+        self.loop.create_task(self.on_open_message(ws, key))
 
         log.debug("Connected!")
 
@@ -56,6 +56,12 @@ class PlayerView():
                     log.error(f'Invalid message: {msg.data}')
 
         return ws
+
+    async def on_open_message(self, ws, key):
+        await send_json(ws, enclose_packet('hello', key=key))
+        await send_json(ws, enclose_packet('event_queue_change', {'queue': self.player.list}))
+        await send_json(ws, enclose_packet('event_player_state_change', self.player.enclose_state()))
+        await send_json(ws, enclose_packet('event_playlists_change', {'playlists': await self.playlist.enclose_playlists()}))
 
     async def broadcast(self, packet):
         log.debug(f'Broadcasting: {packet}')
@@ -119,6 +125,35 @@ class PlayerView():
             'queue': self.player.list
         }
         await self.broadcast(enclose_packet('event_queue_change', ret))
+
+    def on_playlists_change(self):
+        log.debug('Playlists changed. Broadcasting...')
+        self.loop.create_task(self.event_playlists_change())
+
+    async def event_playlists_change(self):
+        ret = {
+            'playlists': await self.playlist.enclose_playlists()
+        }
+        await self.broadcast(enclose_packet('event_playlists_change', ret))
+
+    def on_playlist_entry_change(self, playlist_name):
+        log.debug(f'Playlist {playlist_name} changed. Broadcasting...')
+        self.loop.create_task(self.event_playlist_entry_change(playlist_name))
+
+    async def event_playlist_entry_change(self, playlist_name):
+        ret = {
+            'name': playlist_name
+        }
+        await self.broadcast(enclose_packet('event_playlist_entry_change', ret))
+
+    def on_queue_empty(self):
+        log.debug('Queue is empty. Adding from Likes list...')
+        self.loop.create_task(self.do_on_queue_empty())
+
+    async def do_on_queue_empty(self):
+        await self.player.queue.add_entry(await self.playlist.likes.get_playable_entries(), shuffle=True)
+    
+    # Operation handlers
 
     async def op_search(self, data):
         """
@@ -188,7 +223,7 @@ class PlayerView():
         """
 
         ret = {
-            'playlists': self.playlist.list
+            'playlists': await self.playlist.enclose_playlists()
         }
         return enclose_packet('playlists', ret)
 
@@ -285,6 +320,23 @@ class PlayerView():
         resolved = await self.manager.resolve(uri)
         pl.add(resolved)
 
+    async def op_remove_from_playlist(self, data):
+        name = data.get('name')
+        uri = data.get('uri')
+        if not name:
+            log.error('name not found in data')
+            return
+        if not uri:
+            log.error('uri not found in data')
+            return
+
+        pl = self.playlist.get_playlist(name)
+        if not pl:
+            log.error(f'No playlist found for {name}')
+            return
+
+        pl.remove(uri)
+
     async def op_play(self, data):
         """
         {
@@ -334,6 +386,17 @@ class PlayerView():
 
         await self.player.skip()
 
+    async def op_skip_to(self, data):
+        index = data.get('index')
+        uri = data.get('uri')
+        if not index:
+            log.error('Index not found in data')
+        if not uri:
+            log.error('Uri not found in data')
+
+        await self.player.queue.seek(uri, index)
+        await self.player.skip()
+
     async def op_queue(self, data):
         """
         {
@@ -350,11 +413,19 @@ class PlayerView():
         """
 
         uri = data.get('uri')
-        if not uri:
-            log.error('URI not found in request packet')
-            return
+        head = data.get('head')
+        playlist = data.get('playlist')
+        if not playlist and not uri:
+            log.error('Uri or playlist is needed.')
 
-        await self.player.add_entry(uri)
+        if playlist:
+            pl = self.playlist.get_playlist(playlist)
+            if pl:
+                await self.player.queue.add_entry(await pl.get_playable_entries(), head=head or False)
+            else:
+                log.error('Playlist not found.')
+        else:
+            await self.player.add_entry(uri, head=head or False)
     
     async def op_state(self):
         return enclose_packet('state', self.player.enclose_state())
@@ -362,8 +433,28 @@ class PlayerView():
     async def op_shuffle(self):
         await self.player.queue.shuffle()
 
+    async def op_repeat(self, data):
+        uri = data.get('uri')
+        count = data.get('count')
+        if not uri:
+            log.error('Uri not found in data')
+
+        await self.player.repeat(uri, count or 1)
+
     async def op_clear_queue(self):
         await self.player.queue.clear()
+
+    async def op_remove(self, data):
+        uri = data.get('uri')
+        index = data.get('index')
+        if not uri:
+            log.error('Uri not found in data')
+            return
+        if not index:
+            log.error('Index not found in data')
+            return
+
+        await self.player.queue.remove(uri, index)
 
     async def op_list_queue(self):
         """
@@ -390,6 +481,14 @@ class PlayerView():
         }
 
         return enclose_packet('list_queue', ret)
+
+    async def op_edit_queue(self, data):
+        edited = data.get('queue')
+        if not isinstance(edited, list):
+            log.error('Invalid type for queue')
+            return
+
+        await self.player.queue.assign(edited)
 
 def enclose_packet(type, data=None, key=None):
     ret = {

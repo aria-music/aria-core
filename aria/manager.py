@@ -52,7 +52,7 @@ class MediaSourceManager():
         return ret
 
     def get_provider(self, uri) -> Optional[Provider]:
-        prefix = uri.split(':')[0]
+        prefix = uri.split(':')[0] if isinstance(uri, str) else uri.uri.split(':')[0]
         provider = self.resolvers.get(prefix)
         if not provider:
             log.error(f'No provider matches for `{prefix}`')

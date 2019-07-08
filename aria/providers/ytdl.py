@@ -102,7 +102,7 @@ class YTDLProvider(Provider):
         return ret
 
     async def resolve_playable(self, uri, cache_dir) -> Sequence[YoutubeDLEntry]:
-        resolved = await self.resolve(uri)
+        resolved = await self.resolve(uri) if isinstance(uri, str) else [uri]
         ret = []
         for song in resolved:
             try:

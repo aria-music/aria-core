@@ -96,8 +96,8 @@ class GPMProvider(Provider):
 
         return [self.enclose_entry(song)] if song else []
 
-    async def resolve_playable(self, uri:str, cache_dir) -> Sequence[GPMEntry]:
-        resolved = await self.resolve(uri)
+    async def resolve_playable(self, uri:Union[str, EntryOverview], cache_dir) -> Sequence[GPMEntry]:
+        resolved = await self.resolve(uri) if isinstance(uri, str) else [uri]
         return [GPMEntry(cache_dir, self, song) for song in resolved]
 
     async def search(self, keyword:str) -> Sequence[EntryOverview]:

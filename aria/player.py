@@ -14,6 +14,7 @@ class PlayerQueue():
     def __init__(self, player):
         self.player = player
         self.on_queue_change = self.player.view.on_queue_change
+        self.on_queue_empty = self.player.view.on_queue_empty
 
         self.loop = asyncio.get_event_loop()
         self.queue = deque()
@@ -29,6 +30,7 @@ class PlayerQueue():
                     ret = self.queue.popleft()
                 except:
                     log.error('No entry.')
+                    self.on_queue_empty()
                     break
             
             if not ret.end.is_set():
@@ -50,13 +52,16 @@ class PlayerQueue():
         self.on_queue_change()
         return ret
 
-    async def add_entry(self, entries:Union[Sequence[PlayableEntry], PlayableEntry], head=False):
+    async def add_entry(self, entries:Union[Sequence[PlayableEntry], PlayableEntry], head=False, shuffle=False):
         to_add = entries if isinstance(entries, list) else [entries]
         async with self.lock:
             if head:
                 self.queue.extendleft(to_add[::-1])
             else:
                 self.queue.extend(to_add)
+
+        if shuffle:
+            await self.shuffle()
 
         self.loop.create_task(self.prepare(self.queue[0]))
         self.player.on_entry_added()
@@ -70,6 +75,53 @@ class PlayerQueue():
                 self.on_queue_change()
             except:
                 pass
+
+    async def remove(self, uri, index):
+        async with self.lock:
+            try:
+                to_delete = self.queue[index]
+            except:
+                log.error(f'Entry not found for index {index}')
+                return
+
+            if to_delete.uri != uri:
+                log.error('Uri mismatch!')
+                return
+
+            self.loop.create_task(self.remove_entry(to_delete))
+
+    async def seek(self, uri, index):
+        async with self.lock:
+            if not self.queue[index].uri == uri:
+                log.error('Uri mismatch.')
+                return
+            
+            # do we need to check queue length?
+            try:
+                for _ in range(index):
+                    self.queue.popleft()
+            except:
+                log.error('Queue length not enough. Fuck client.')
+        
+        # dont call on_queue_change since next get_entry does it well
+
+    async def assign(self, uris):
+        async with self.lock:
+            if len(uris) != len(self.queue):
+                log.error('Queue length mismatch. Cannot assign.')
+                return
+            
+            indexes = []
+
+            current_uris = [x.uri for x in self.queue]
+            for index, (current, new) in enumerate(zip(current_uris, uris)):
+                if not current == new:
+                    indexes.append(index)
+
+            if len(indexes) == 2:
+                self.queue[indexes[0]], self.queue[indexes[1]] = self.queue[indexes[1]], self.queue[indexes[0]]
+            else:
+                log.error('Invalid request...?')
 
     async def clear(self):
         async with self.lock:
@@ -121,12 +173,13 @@ class Player():
 
     async def play(self):
         async with self.lock:
-            self.current = await self.queue.get_next()
-            if not self.current:
-                return
+            if self.state == PlayerState.STOPPED:
+                self.current = await self.queue.get_next()
+                if not self.current:
+                    return
 
-            self.change_state('playing')
-            self.stream.play(self.current.filename)
+                self.change_state('playing')
+                self.stream.play(self.current.filename)
 
     async def pause(self):
         async with self.lock:
@@ -143,14 +196,22 @@ class Player():
     async def skip(self):
         async with self.lock:
             self.change_state('stopped')
-            # await self.loop.run_in_executor(self.pool, self.stream.stop)
+            self.stream.stop()
             self.loop.create_task(self.play())
 
     # TODO: do resolve in playqueue
-    async def add_entry(self, uri):
+    async def add_entry(self, uri, head):
         entry = await self.prov.resolve_playable(uri)
         if entry:
-            await self.queue.add_entry(entry)
+            await self.queue.add_entry(entry, head)
+
+    async def repeat(self, uri, count):
+        async with self.lock:
+            if not self.current.uri == uri:
+                log.error('URI mismatch.')
+                return
+
+            self.queue.add_entry([self.current] * count)
 
     @property
     def list(self):
@@ -182,6 +243,6 @@ class Player():
 
     async def do_on_play_finished(self):
         async with self.lock:
-            self.state = PlayerState.STOPPED
             log.debug('Play finished!')
+            self.change_state('stopped')            
             self.loop.create_task(self.play())

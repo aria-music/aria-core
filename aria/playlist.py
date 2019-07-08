@@ -33,9 +33,6 @@ class Playlist():
 
         return cls(view, name, filename, provider, pool, loop)
 
-    def __len__(self):
-        return len(self.list)
-
     def add(self, entry:Union[Sequence[EntryOverview], EntryOverview]):
         entries = entry if isinstance(entry, list) else [entry]
 
@@ -121,8 +118,7 @@ class Playlist():
         file = Path(self.file) if isinstance(self.file, str) else Path(self.file)
         try:
             with file.open('w') as f:
-                for line in self.list.keys():
-                    f.write(line)
+                f.write('\n'.join(self.list.keys()))
         except:
             log.error(f'Failed to save playlist to file {file}: ', exc_info=True)
 
@@ -153,6 +149,7 @@ class PlaylistManager():
                 log.info(f'Loading playlist {file}')
                 try:
                     self.lists[file.stem] = Playlist(self.view, file.stem, file, self.prov, self.pool, self.loop)
+                    log.debug(f'Loaded {file.stem}: {self.lists[file.stem]}')
                 except:
                     log.error(f'Failed to initialize playlist {file.stem}: ', exc_info=True)
         except:
@@ -162,6 +159,7 @@ class PlaylistManager():
         if 'Likes' in self.lists:
             log.info('Found likes list.')
             self.likes = self.lists['Likes']
+            log.debug(self.likes)
         else:
             log.info('Likes list not found. Creating...')
             self.likes = self.do_create('Likes')
@@ -176,17 +174,24 @@ class PlaylistManager():
         for name, pl in self.lists.items():
             ret.append({
                 'name': name,
-                'length': len(pl),
+                'length': len(pl.list),
                 'thumbnails': await pl.get_thumbnails()
             })
 
         return ret
 
     def get_playlist(self, name:str):
-        return self.lists.get(name)
+        log.debug(list(self.lists.keys()))
+        ret = None
+        try:
+            ret = self.lists[name]
+        except:
+            log.error(f'list not found for {name}')
+        
+        return ret
 
     def is_liked(self, uri):
-        return uri in self.likes.list
+        return uri.split(':')[1].strip('./') in [item.split(':')[1].strip('./') for item in self.likes.list]
 
     def like(self, uri):
         self.likes.add(uri)

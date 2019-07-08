@@ -120,6 +120,7 @@ class PlayerQueue():
 
             if len(indexes) == 2:
                 self.queue[indexes[0]], self.queue[indexes[1]] = self.queue[indexes[1]], self.queue[indexes[0]]
+                self.on_queue_change()
             else:
                 log.error('Invalid request...?')
 
@@ -211,7 +212,7 @@ class Player():
                 log.error('URI mismatch.')
                 return
 
-            self.queue.add_entry([self.current] * count)
+            self.loop.create_task(self.queue.add_entry([self.current] * count, head=True))
 
     @property
     def list(self):

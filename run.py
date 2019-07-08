@@ -17,7 +17,7 @@ log = logging.getLogger()
 # Silence loggers
 logging.getLogger('aiosqlite').setLevel(logging.ERROR)
 logging.getLogger('gmusicapi').setLevel(logging.ERROR)
-logging.getLogger('aiohttp').setLevel(logging.ERROR)
+# logging.getLogger('aiohttp').setLevel(logging.ERROR)
 
 
 if __name__ == '__main__':

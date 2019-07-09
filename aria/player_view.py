@@ -95,10 +95,11 @@ class PlayerView():
                     log.error(f'Invalid message: {msg.data}')
                     continue
 
-                if json_message.get('key') not in self.connections:
+                if json_message.get('key') != key:
                     log.error('Invalid key. Deleting connection...')
                     await ws.close()
                     break
+                    
                 self.loop.create_task(self.handle_message(ws, msg.json()))
 
         return ws

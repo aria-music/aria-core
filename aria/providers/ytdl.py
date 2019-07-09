@@ -9,6 +9,7 @@ from typing import Sequence
 from youtube_dl import YoutubeDL
 
 from aria.models import EntryOverview, PlayableEntry, Provider
+from aria.utils import get_duration
 
 log = getLogger(__name__)
 
@@ -33,6 +34,7 @@ class YoutubeDLEntry(PlayableEntry):
         self.thumbnail = self.entry.thumbnail
         self.expected_filename = (self.cache_dir/filename) if filename else None
         self.filename = None
+        self.duration = None
     
         self.start = asyncio.Event()
         self.end = asyncio.Event()
@@ -45,7 +47,7 @@ class YoutubeDLEntry(PlayableEntry):
                 log.info(f'Use cached: {self.expected_filename}')
         else:
             try:
-                filename = await self.ytdl.download(self.uri)
+                filename, duration = await self.ytdl.download(self.uri)
                 dest = Path(self.cache_dir)/filename
                 Path(filename).rename(dest)
                 self.filename = str(dest)
@@ -53,6 +55,8 @@ class YoutubeDLEntry(PlayableEntry):
             except:
                 log.error('Moving file failed: ', exc_info=True)
 
+        self.duration = await get_duration(self.filename)
+        
         self.end.set()
 
     def is_ready(self):
@@ -122,7 +126,8 @@ class YTDLProvider(Provider):
         except:
             log.error('Download failed. YoutubeDL sucks: ', exc_info=True)
         
-        return filename
+        duration = res.get('duration')
+        return filename, duration
 
     async def search(self, query):
         # resolve-only provider

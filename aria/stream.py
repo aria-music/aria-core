@@ -19,6 +19,11 @@ class StreamPlayer():
         self.create_opus()
         self.ffmpeg = FFMpegPlayer(self.opus)
         self.is_paused = False
+        self.position = 0.00
+
+    @property
+    def current_position(self):
+        return int(self.position)
 
     # These control command must be runned **synchronously** 
     def play(self, file:Union[str, Path]):
@@ -26,6 +31,7 @@ class StreamPlayer():
         file = file if isinstance(file, str) else str(file)
         self.ffmpeg.create(file)
         sleep(0.5) # Ensure ffmpeg start decoding
+        self.position = 0
         self.is_paused = False
 
         # while not self.read():
@@ -37,6 +43,7 @@ class StreamPlayer():
             return b''
 
         audio = self.ffmpeg.read()
+        self.position += 0.02
         # log.debug(f'Audio bytes: {len(audio)}')
         return self.opus.encode(audio, self.opus.SAMPLES_PER_FRAME) if audio else self.play_finished()
 

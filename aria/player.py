@@ -230,7 +230,9 @@ class Player():
             'state': self.state.name.lower(),
             'entry': {
                 **self.current.entry.as_dict(),
-                'is_liked': self.view.playlist.is_liked(self.current.entry.uri)
+                'is_liked': self.view.playlist.is_liked(self.current.entry.uri),
+                'duration': self.current.duration,
+                'position': self.stream.current_position
             } if not self.state == PlayerState.STOPPED else None
         }
 

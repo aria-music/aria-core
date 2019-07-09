@@ -355,6 +355,9 @@ class PlayerView():
 
         resolved = await self.manager.resolve(uri)
         pl.add(resolved)
+        
+        if name == 'Likes':
+            self.on_player_state_change()
 
     async def op_remove_from_playlist(self, data):
         name = data.get('name')
@@ -373,6 +376,9 @@ class PlayerView():
 
         pl.remove(uri)
 
+        if name == 'Likes':
+            self.on_player_state_change()
+
     async def op_like(self, data):
         uri = data.get('uri')
         if not uri:
@@ -383,6 +389,8 @@ class PlayerView():
             self.playlist.dislike(uri)
         else:
             self.playlist.like(uri)
+
+        self.on_player_state_change()
 
     async def op_play(self, data):
         """

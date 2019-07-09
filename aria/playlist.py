@@ -191,7 +191,7 @@ class PlaylistManager():
         return ret
 
     def is_liked(self, uri):
-        return uri.split(':')[1].strip('./') in [item.split(':')[1].strip('./') for item in self.likes.list]
+        return uri.split(':')[-1].strip('./') in [item.split(':')[-1].strip('./') for item in self.likes.list]
 
     def like(self, uri):
         self.likes.add(uri)
@@ -200,7 +200,7 @@ class PlaylistManager():
         self.likes.remove(uri)
 
     async def create(self, name:str):
-        if not name in self.lists.keys():
+        if not name in self.lists:
             self.lists[name] = await self.loop.run_in_executor(self.pool, partial(self.do_create, name))
             self.view.on_playlists_change()
 

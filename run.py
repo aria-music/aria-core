@@ -8,7 +8,7 @@ from aria.player_view import PlayerView
 from aria.stream_view import StreamView
 
 handler = logging.StreamHandler()
-handler.addFilter(lambda module: module.name.split('.')[0] in ['aria'])
+# handler.addFilter(lambda module: module.name.split('.')[0] in ['aria'])
 
 logging.basicConfig(level=logging.DEBUG, format='[{asctime}][{levelname}][{module}][{funcName}] {message}',
                     style='{', handlers=[handler])

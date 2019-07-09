@@ -1,4 +1,5 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from inspect import signature
 from logging import getLogger
@@ -31,6 +32,7 @@ op_search (query, [provider])
 op_playlists
 op_playlist (name)
 op_create_playlist (name)
+op_delete_playlist (name)
 op_add_to_playlist (name, uri)
 op_remove_from_playlist (name, uri)
 op_like (uri)
@@ -54,19 +56,20 @@ class PlayerView():
     def __init__(self, config):
         self.config = config
         self.loop = asyncio.get_event_loop()
+        self.pool = ThreadPoolExecutor(max_workers=4)
 
         self.manager = MediaSourceManager(self.config)
         self.playlist = PlaylistManager(self, self.config, self.manager)
         self.player = Player(self, self.manager)
 
         self.connections = {}
-        self.refresh_thread = Thread(target=self.refresh_connections)
-        self.refresh_thread.start()
+        # self.refresh_thread = Thread(target=self.refresh_connections)
+        # self.refresh_thread.start()
 
-    def refresh_connections(self):
-        while True:
-            self.connections = {k: v for k, v in self.connections.items() if not v.closed}
-            sleep(1)
+    # def refresh_connections(self):
+    #     while True:
+    #         self.connections = {k: v for k, v in self.connections.items() if not v.closed}
+    #         sleep(1)
 
     async def get_ws(self, request):
         ws = web.WebSocketResponse(heartbeat=30)
@@ -82,26 +85,54 @@ class PlayerView():
         self.loop.create_task(self.on_open_message(ws, key))
 
         log.debug("Connected!")
+        log.debug(f'Current player: {len(self.connections)} connections')
 
         async for msg in ws:
             if msg.type == WSMsgType.TEXT:
                 try:
-                    self.loop.create_task(self.handle_message(ws, msg.json()))
+                    json_message = msg.json()
                 except:
                     log.error(f'Invalid message: {msg.data}')
+                    continue
+
+                if json_message.get('key') not in self.connections:
+                    log.error('Invalid key. Deleting connection...')
+                    await ws.close()
+                    break
+                self.loop.create_task(self.handle_message(ws, msg.json()))
 
         return ws
 
     async def on_open_message(self, ws, key):
-        await send_json(ws, enclose_packet('hello', key=key))
-        await send_json(ws, enclose_packet('event_queue_change', {'queue': self.player.list}))
-        await send_json(ws, enclose_packet('event_player_state_change', self.player.enclose_state()))
-        await send_json(ws, enclose_packet('event_playlists_change', {'playlists': await self.playlist.enclose_playlists()}))
+        await self.send_json(key, ws, enclose_packet('hello', key=key))
+        await self.send_json(key, ws, enclose_packet('event_queue_change', {'queue': self.player.list}))
+        await self.send_json(key, ws, enclose_packet('event_player_state_change', self.player.enclose_state()))
+        await self.send_json(key, ws, enclose_packet('event_playlists_change', {'playlists': await self.playlist.enclose_playlists()}))
 
     async def broadcast(self, packet):
         log.debug(f'Broadcasting: {packet}')
-        for ws in self.connections.values():
-            await send_json(ws, packet)
+        for key, ws in self.connections.items():
+            self.loop.create_task(self.send_json(key, ws, packet))
+    
+    async def send_json(self, key, ws, json):
+        if ws.closed:
+            log.info('Deleting closed connection...')
+            self.delete_connection(key)
+        else:
+            try:
+                await ws.send_json(json, dumps=json_dump)
+            except:
+                log.error('Failed to send. Deleting connection...')
+                self.delete_connection(key)
+
+    def delete_connection(self, key):
+        self.loop.run_in_executor(self.pool, partial(self.do_delete_connection, key))
+
+    def do_delete_connection(self, key):
+        try:
+            self.connections.pop(key)
+        except:
+            log.error(f'Connection not found for key {key}')
 
     async def handle_message(self, ws, payload: dict):
         op = payload.get('op')
@@ -112,10 +143,6 @@ class PlayerView():
             log.error(f'Invalid op type. Expected str: {op}')
             return
         
-        if not isinstance(key, str) or key not in self.connections:
-            log.error(f'Invalid key: {key}')
-            return
-
         handler = getattr(self, f'op_{op}', None)
         if not handler:
             log.error(f'No handler found for op {op}')
@@ -137,7 +164,7 @@ class PlayerView():
         ret = await handler(**params)
         if ret:
             log.debug(f'Returning {ret}')
-            await send_json(ws, ret)
+            await self.send_json(key, ws, ret)
 
         log.info(f'task op {op} done.')
     
@@ -186,7 +213,9 @@ class PlayerView():
         self.loop.create_task(self.do_on_queue_empty())
 
     async def do_on_queue_empty(self):
-        await self.player.queue.add_entry(await self.playlist.likes.get_playable_entries(), shuffle=True)
+        to_add = await self.playlist.likes.random()
+        if to_add:
+            await self.player.queue.add_entry(await self.manager.resolve_playable(to_add))
     
     # Operation handlers
 
@@ -322,6 +351,14 @@ class PlayerView():
 
         await self.playlist.create(name)
 
+    async def op_delete_playlist(self, data):
+        name = data.get('name')
+        if not name:
+            log.error('No name found in data')
+            return
+        
+        self.playlist.delete(name)
+
     async def op_add_to_playlist(self, data):
         """
         {
@@ -385,10 +422,18 @@ class PlayerView():
             log.error('uri not found in data')
             return
 
-        if self.playlist.is_liked(uri):
-            self.playlist.dislike(uri)
-        else:
-            self.playlist.like(uri)
+        entries = await self.manager.resolve(uri)
+        if not entries:
+            log.error('No entry.')
+            return
+        
+        for entry in entries:
+            if self.playlist.is_liked(entry.uri):
+                log.debug(f'dislike {entry.uri}')
+                self.playlist.dislike(entry.uri)
+            else:
+                log.debug(f'like {entry.uri}')
+                self.playlist.like(entry)
 
         self.on_player_state_change()
 
@@ -444,7 +489,7 @@ class PlayerView():
     async def op_skip_to(self, data):
         index = data.get('index')
         uri = data.get('uri')
-        if not index:
+        if index == None:
             log.error('Index not found in data')
         if not uri:
             log.error('Uri not found in data')
@@ -494,7 +539,7 @@ class PlayerView():
         if not uri:
             log.error('Uri not found in data')
 
-        await self.player.repeat(uri, count or 1)
+        await self.player.repeat(uri, min(count or 1, 100))
 
     async def op_clear_queue(self):
         await self.player.queue.clear()
@@ -505,7 +550,7 @@ class PlayerView():
         if not uri:
             log.error('Uri not found in data')
             return
-        if not index:
+        if index == None:
             log.error('Index not found in data')
             return
 
@@ -555,6 +600,3 @@ def enclose_packet(type, data=None, key=None):
         ret['data'] = data
     
     return ret
-
-async def send_json(ws, json):
-    await ws.send_json(json, dumps=json_dump)

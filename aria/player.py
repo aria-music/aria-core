@@ -102,6 +102,11 @@ class PlayerQueue():
                     self.queue.popleft()
             except:
                 log.error('Queue length not enough. Fuck client.')
+
+            try:
+                self.loop.create_task(self.prepare(self.queue[0]))
+            except:
+                pass
         
         # dont call on_queue_change since next get_entry does it well
 
@@ -110,19 +115,16 @@ class PlayerQueue():
             if len(uris) != len(self.queue):
                 log.error('Queue length mismatch. Cannot assign.')
                 return
-            
-            indexes = []
 
-            current_uris = [x.uri for x in self.queue]
-            for index, (current, new) in enumerate(zip(current_uris, uris)):
-                if not current == new:
-                    indexes.append(index)
+            currents = {entry.uri: entry for entry in self.queue}
+            new_queue = [currents[uri] for uri in uris]
+            self.queue = deque(new_queue)
+            self.on_queue_change()
 
-            if len(indexes) == 2:
-                self.queue[indexes[0]], self.queue[indexes[1]] = self.queue[indexes[1]], self.queue[indexes[0]]
-                self.on_queue_change()
-            else:
-                log.error('Invalid request...?')
+            try:
+                self.loop.create_task(self.prepare(self.queue[0]))
+            except:
+                pass
 
     async def clear(self):
         async with self.lock:

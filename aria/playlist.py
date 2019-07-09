@@ -18,9 +18,9 @@ class Playlist():
         self.file = file
         self.prov = provider
         self.pool = pool or ThreadPoolExecutor(max_workers=8)
-        self.lock = asyncio.Lock()
-
         self.loop = loop or asyncio.get_event_loop()
+        
+        self.lock = asyncio.Lock(loop=self.loop)
         self.list = {}
 
         #self.loop.create_task(self.load_file())
@@ -45,6 +45,7 @@ class Playlist():
                     self.list[stripped] = None
         
         self.loop.create_task(self.save_file())
+        self.view.on_playlists_change()
         self.view.on_playlist_entry_change(self.name)
     
     def remove(self, entry:Union[str, list]):
@@ -56,16 +57,19 @@ class Playlist():
                 self.list.pop(stripped)
         
         self.loop.create_task(self.save_file())
+        self.view.on_playlists_change()
         self.view.on_playlist_entry_change(self.name)
 
-    def random(self):
-        ret = None
+    async def random(self):
         try:
-            ret = choice(list(self.list.items()))
+            key, val = choice(list(self.list.items()))
         except:
             log.error('Playlist is empty!')
+            return
 
-        return ret
+        if not val:
+            val = await self.fill_resolve(key)
+        return val
 
     async def fill_resolve(self, key):
         if self.list[key]:
@@ -77,10 +81,11 @@ class Playlist():
             return
 
         self.list[key] = ret[0]
+        return self.list[key]
 
     async def get_thumbnails(self):
         need_resolve = [self.fill_resolve(k) for k, v in list(self.list.items())[:4] if not v]
-        log.debug(f'{self.name}: {len(need_resolve)} entries are incomplete')
+        # log.debug(f'{self.name}: {len(need_resolve)} entries are incomplete')
         if need_resolve:
             await asyncio.wait(need_resolve, return_when=asyncio.ALL_COMPLETED)
 
@@ -164,19 +169,29 @@ class PlaylistManager():
             log.info('Likes list not found. Creating...')
             self.likes = self.do_create('Likes')
             self.lists['Likes'] = self.likes
+
+        self.loop.create_task(self.likes.get_entries())
         
     @property
     def list(self):
         return list(self.lists.keys())
 
     async def enclose_playlists(self):
-        ret = []
+        let_enclose = [pl.get_thumbnails() for pl in self.lists.values()]
+        await asyncio.wait(let_enclose, return_when=asyncio.ALL_COMPLETED)
+        ret = [{
+            'name': self.likes.name,
+            'length': len(self.likes.list),
+            'thumbnails': await self.likes.get_thumbnails()
+        }]
+
         for name, pl in self.lists.items():
-            ret.append({
-                'name': name,
-                'length': len(pl.list),
-                'thumbnails': await pl.get_thumbnails()
-            })
+            if not pl == self.likes:
+                ret.append({
+                    'name': name,
+                    'length': len(pl.list),
+                    'thumbnails': await pl.get_thumbnails()
+                })
 
         return ret
 
@@ -200,9 +215,22 @@ class PlaylistManager():
         self.likes.remove(uri)
 
     async def create(self, name:str):
-        if not name in self.lists:
+        if name in self.lists:
+            log.error(f'Already exists: {name}')
+        else:
+            log.info(f'Creating list {name}')
             self.lists[name] = await self.loop.run_in_executor(self.pool, partial(self.do_create, name))
             self.view.on_playlists_change()
 
     def do_create(self, name):
         return Playlist.create(self.view, name, Path(self.playlists_dir)/f'{name}.aria', self.prov, self.pool, self.loop)
+
+    def delete(self, name:str):
+        if name == 'Likes':
+            log.error('You cannot delete Likes list!!!')
+            return
+
+        if name in self.lists:
+            self.lists.pop(name)
+            log.info(f'Deleted playlist {name}')
+            self.view.on_playlists_change()

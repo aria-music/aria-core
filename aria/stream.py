@@ -23,7 +23,7 @@ class StreamPlayer():
 
     @property
     def current_position(self):
-        return int(self.position)
+        return self.position
 
     # These control command must be runned **synchronously** 
     def play(self, file:Union[str, Path]):

@@ -75,6 +75,8 @@ class StreamView():
         except:
             log.error(f'Connection not found for key {key}')
 
+        log.debug(f'Current stream: {len(self.connections)} connections')
+
     def streaming(self):
         # CALLED FROM OTHER THREAD!
         looptime = time()

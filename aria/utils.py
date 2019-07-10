@@ -44,7 +44,7 @@ async def get_duration(filename):
             stdout=subprocess.PIPE
         )
         stdout, _ = await ffprobe.communicate()
-        ret = int(float(stdout.decode('utf-8').strip()))
+        ret = float(stdout.decode('utf-8').strip())
     except:
         log.error('Failed to get duration: ', exc_info=True)
 

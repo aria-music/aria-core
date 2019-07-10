@@ -135,6 +135,8 @@ class PlayerView():
         except:
             log.error(f'Connection not found for key {key}')
 
+        log.debug(f'Current player: {len(self.connections)} connections')
+
     async def handle_message(self, ws, payload: dict):
         op = payload.get('op')
         key = payload.get('key')

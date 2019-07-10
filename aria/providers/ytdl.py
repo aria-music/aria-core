@@ -47,7 +47,7 @@ class YoutubeDLEntry(PlayableEntry):
                 log.info(f'Use cached: {self.expected_filename}')
         else:
             try:
-                filename, duration = await self.ytdl.download(self.uri)
+                filename = await self.ytdl.download(self.uri)
                 dest = Path(self.cache_dir)/filename
                 Path(filename).rename(dest)
                 self.filename = str(dest)
@@ -126,8 +126,7 @@ class YTDLProvider(Provider):
         except:
             log.error('Download failed. YoutubeDL sucks: ', exc_info=True)
         
-        duration = res.get('duration')
-        return filename, duration
+        return filename
 
     async def search(self, query):
         # resolve-only provider

@@ -35,18 +35,22 @@ class Playlist():
 
     def add(self, entry:Union[Sequence[EntryOverview], EntryOverview]):
         entries = entry if isinstance(entry, list) else [entry]
+        changed = False
 
         for item in entries:
             if isinstance(item, EntryOverview):
                 self.list[item.uri.strip()] = item
+                changed = True
             else:
                 stripped = item.uri.stripped()
                 if stripped and stripped not in self.list.keys():
                     self.list[stripped] = None
+                    changed = True
         
-        self.loop.create_task(self.save_file())
-        self.view.on_playlists_change()
-        self.view.on_playlist_entry_change(self.name)
+        if changed:
+            self.loop.create_task(self.save_file())
+            self.view.on_playlists_change()
+            self.view.on_playlist_entry_change(self.name)
     
     def remove(self, entry:Union[str, list]):
         entries = entry if isinstance(entry, list) else [entry]
@@ -134,6 +138,7 @@ class PlaylistManager():
         self.playlists_dir = config.playlists_dir
         self.loop = asyncio.get_event_loop()
         self.pool = ThreadPoolExecutor(max_workers=4)
+        self.lock = asyncio.Lock()
 
         self.lists = {}
         self.likes = None # special playlist
@@ -215,22 +220,33 @@ class PlaylistManager():
         self.likes.remove(uri)
 
     async def create(self, name:str):
-        if name in self.lists:
-            log.error(f'Already exists: {name}')
-        else:
-            log.info(f'Creating list {name}')
-            self.lists[name] = await self.loop.run_in_executor(self.pool, partial(self.do_create, name))
-            self.view.on_playlists_change()
+        async with self.lock:
+            if name in self.lists:
+                log.error(f'Already exists: {name}')
+            else:
+                log.info(f'Creating list {name}')
+                self.lists[name] = await self.loop.run_in_executor(self.pool, partial(self.do_create, name))
+                self.view.on_playlists_change()
 
     def do_create(self, name):
         return Playlist.create(self.view, name, Path(self.playlists_dir)/f'{name}.aria', self.prov, self.pool, self.loop)
 
-    def delete(self, name:str):
+    async def delete(self, name:str):
         if name == 'Likes':
             log.error('You cannot delete Likes list!!!')
             return
 
-        if name in self.lists:
-            self.lists.pop(name)
-            log.info(f'Deleted playlist {name}')
-            self.view.on_playlists_change()
+        async with self.lock:
+            if name in self.lists:
+                to_del = self.lists.pop(name)
+                await self.loop.run_in_executor(self.pool, partial(self.do_delete, to_del.file))
+                log.info(f'Deleted playlist {name}')
+                self.view.on_playlists_change()
+
+    def do_delete(self, file):
+        to_del = Path(file) if isinstance(file, str) else file
+        if to_del.exists():
+            to_del.unlink()
+            log.info(f'Deleted file: {file}')
+        else:
+            log.error(f'File not exists: {file}')

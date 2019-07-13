@@ -71,8 +71,8 @@ class PlayerQueue():
         async with self.lock:
             try:
                 self.queue.remove(entry)
-                self.loop.create_task(self.prepare(self.queue[0]))
                 self.on_queue_change()
+                self.loop.create_task(self.prepare(self.queue[0]))
             except:
                 pass
 

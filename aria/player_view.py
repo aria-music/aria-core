@@ -360,7 +360,7 @@ class PlayerView():
             log.error('No name found in data')
             return
         
-        self.playlist.delete(name)
+        await self.playlist.delete(name)
 
     async def op_add_to_playlist(self, data):
         """

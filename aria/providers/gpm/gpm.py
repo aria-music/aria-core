@@ -53,8 +53,6 @@ class GPMEntry(PlayableEntry):
     def is_ready(self):
         return Path(self.filename).exists()
 
-    
-
 
 class GPMProvider(Provider):
     name = 'gpm'
@@ -131,7 +129,7 @@ class GPMProvider(Provider):
             album = song.get('albumArtRef')
             album_url = ''
             if album:
-                album_url = album[0].get('url')
+                album_url = album[0].get('url').replace('http://', 'https://', 1)
             entry = GPMSong(song.get('id', ''), song.get('title', ''),
                             song.get('artist', ''), song.get('album', ''),
                             album_url)

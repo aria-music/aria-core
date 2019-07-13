@@ -174,7 +174,7 @@ class OpusError(AriaException):
         The error code returned.
     """
 
-    def __init__(self, code):
+    def __init__(self, code=None):
         self.code = code
         msg = _lib.opus_strerror(self.code).decode('utf-8')
         log.info('"%s" has happened', msg)
@@ -227,10 +227,10 @@ class Encoder:
             raise OpusNotLoaded()
 
         self._state = self._create_state()
-        self.set_vbr(0)
-        # self.set_bitrate(128)
-        # self.set_fec(True)
-        self.set_expected_packet_loss_percent(1.00)
+        # self.set_vbr(0)
+        self.set_bitrate(96)
+        self.set_fec(True)
+        self.set_expected_packet_loss_percent(0.10)
         self.set_bandwidth('full')
         self.set_signal_type('auto')
 
@@ -279,4 +279,5 @@ class Encoder:
 
         ret = _lib.opus_encode(self._state, pcm, frame_size, data, max_data_bytes)
 
+        # log.debug(f'packet len: {ret}')
         return array.array('b', data[:ret]).tobytes()

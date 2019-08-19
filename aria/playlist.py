@@ -220,6 +220,12 @@ class PlaylistManager():
         self.likes.remove(uri)
 
     async def create(self, name:str):
+        # sanitize name
+        name = Path(name).name
+        log.info(f'Requested name: {name}')
+        if not name:
+            return
+
         async with self.lock:
             if name in self.lists:
                 log.error(f'Already exists: {name}')

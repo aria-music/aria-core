@@ -30,7 +30,7 @@ class StreamPlayer():
         self.is_paused = True
         file = file if isinstance(file, str) else str(file)
         self.ffmpeg.create(file)
-        sleep(0.5) # Ensure ffmpeg start decoding
+        # sleep(0.5) # Ensure ffmpeg start decoding
         self.position = 0
         self.is_paused = False
 

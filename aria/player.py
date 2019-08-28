@@ -182,7 +182,7 @@ class Player():
                     return
 
                 self.change_state('playing')
-                self.stream.play(self.current.filename)
+                self.stream.play(self.current)
 
     async def pause(self):
         async with self.lock:

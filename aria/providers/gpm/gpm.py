@@ -1,5 +1,4 @@
 import asyncio
-import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from logging import getLogger
@@ -10,7 +9,7 @@ from aiohttp import ClientSession
 from gmusicapi.clients import Mobileclient
 
 from aria.models import EntryOverview, PlayableEntry, Provider
-from aria.utils import save_file, get_duration
+from aria.utils import save_file, get_duration, get_volume
 
 from .store import StoreManager
 from .utils import GPMError, GPMSong, id_to_uri, uri_to_id
@@ -30,6 +29,7 @@ class GPMEntry(PlayableEntry):
         self.thumbnail = self.entry.thumbnail
         self.filename = str(self.cache_dir/f'{self.gpm.name}-{self.song_id}.mp3')
         self.duration = 0
+        self.volume = 0
         
         self.start = asyncio.Event()
         self.end = asyncio.Event()
@@ -47,6 +47,7 @@ class GPMEntry(PlayableEntry):
                 log.error('Failed to download: ', exc_info=True)
         
         self.duration = await get_duration(self.filename)
+        self.volume = await get_volume(self.filename)
 
         self.end.set()
 

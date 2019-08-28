@@ -9,7 +9,7 @@ from typing import Sequence
 from youtube_dl import YoutubeDL
 
 from aria.models import EntryOverview, PlayableEntry, Provider
-from aria.utils import get_duration
+from aria.utils import get_duration, get_volume
 
 log = getLogger(__name__)
 
@@ -34,7 +34,8 @@ class YoutubeDLEntry(PlayableEntry):
         self.thumbnail = self.entry.thumbnail
         self.expected_filename = (self.cache_dir/filename) if filename else None
         self.filename = None
-        self.duration = None
+        self.duration = 0
+        self.volume = 0
     
         self.start = asyncio.Event()
         self.end = asyncio.Event()
@@ -56,6 +57,7 @@ class YoutubeDLEntry(PlayableEntry):
                 log.error('Moving file failed: ', exc_info=True)
 
         self.duration = await get_duration(self.filename)
+        self.volume = await get_volume(self.filename)
         
         self.end.set()
 

@@ -9,20 +9,20 @@ class FFMpegPlayer():
         self.opus = opus_encoder
         self.ffmpeg = None
 
-    def create(self, filename):
-        log.debug(f'Create FFMpeg for file: {filename}')
+    def create(self, entry):
+        log.debug(f'Create FFMpeg for file: {entry.filename}')
         self.kill()
         try:
             self.ffmpeg = subprocess.Popen(
                 [
                     'ffmpeg',
-                    '-i', filename,
+                    '-i', entry.filename,
                     '-nostdin',
                     '-f', 's16le',
                     '-ar', '48000',
                     '-ac', '2',
                     '-vn',
-                    '-af', 'volume=0.25',
+                    '-af', f'volume={-entry.volume}dB, volume=0.25',
                     '-loglevel', 'quiet',
                     'pipe:1'
                 ],

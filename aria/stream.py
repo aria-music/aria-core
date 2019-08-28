@@ -26,10 +26,9 @@ class StreamPlayer():
         return self.position
 
     # These control command must be runned **synchronously** 
-    def play(self, file:Union[str, Path]):
+    def play(self, entry:'PlayableEntry'):
         self.is_paused = True
-        file = file if isinstance(file, str) else str(file)
-        self.ffmpeg.create(file)
+        self.ffmpeg.create(entry)
         # sleep(0.5) # Ensure ffmpeg start decoding
         self.position = 0
         self.is_paused = False

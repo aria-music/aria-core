@@ -4,8 +4,9 @@ from functools import partial
 from logging import getLogger
 from pathlib import Path
 from random import choice
-from typing import Sequence, Union
+from typing import Sequence, Union, Optional
 
+from aria.exceptions import EmptyPlaylist
 from aria.models import EntryOverview, PlayableEntry
 
 log = getLogger(__name__)
@@ -54,26 +55,29 @@ class Playlist():
     
     def remove(self, entry:Union[str, list]):
         entries = entry if isinstance(entry, list) else [entry]
+        removed = []
 
         for item in entries:
             stripped = item.strip()
             if stripped and stripped in self.list.keys():
                 self.list.pop(stripped)
+                removed.append(stripped)
         
         self.loop.create_task(self.save_file())
         self.view.on_playlists_change()
         self.view.on_playlist_entry_change(self.name)
+        self.view.on_entry_removed(removed)
 
     async def random(self):
         try:
             key, val = choice(list(self.list.items()))
         except:
             log.error('Playlist is empty!')
-            return
+            raise EmptyPlaylist()
 
         if not val:
             val = await self.fill_resolve(key)
-        return val
+        return key, val
 
     async def fill_resolve(self, key):
         if self.list[key]:
@@ -82,6 +86,7 @@ class Playlist():
         ret = await self.prov.resolve(key)
         if not len(ret) == 1:
             log.error('Something went wrong...?')
+            self.remove(key)
             return
 
         self.list[key] = ret[0]
@@ -142,6 +147,9 @@ class PlaylistManager():
 
         self.lists = {}
         self.likes = None # special playlist
+
+        self.failed_file = Path(self.playlists_dir)/"failed.txt"
+        self.failed_file_lock = asyncio.Lock()
 
         # self.loop.create_task(self.load_playlists())
         self.do_load_playlists()
@@ -256,3 +264,24 @@ class PlaylistManager():
             log.info(f'Deleted file: {file}')
         else:
             log.error(f'File not exists: {file}')
+
+    async def get_random_entry(self) -> Optional[PlayableEntry]:
+        ret = None
+        while len(self.likes.list) and not ret:
+            try:
+                key, ret = await self.likes.random()
+            except:
+                log.error('Cannot get random entry from empty playlist.')
+                return
+                
+        return ret
+
+    async def record_failed(self, entries):
+        async with self.failed_file_lock:
+            await self.loop.run_in_executor(self.pool, partial(self.do_record_failed, entries))
+
+    def do_record_failed(self, entries):
+        with self.failed_file.open('a', encoding='utf-8') as f:
+            f.write('\n'.join(entries))
+
+        log.info(f'Recorded {len(entries)} errored entries')

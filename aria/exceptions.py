@@ -6,3 +6,6 @@ class ProviderError(AriaException):
 
 class ProviderNotReady(ProviderError):
     pass
+
+class EmptyPlaylist(AriaException):
+    pass

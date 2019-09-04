@@ -216,9 +216,15 @@ class PlayerView():
         self.loop.create_task(self.do_on_queue_empty())
 
     async def do_on_queue_empty(self):
-        to_add = await self.playlist.likes.random()
+        to_add = await self.playlist.get_random_entry()
         if to_add:
             await self.player.queue.add_entry(await self.manager.resolve_playable(to_add))
+
+    def on_entry_removed(self, entry):
+        self.loop.create_task(self.do_on_entry_removed(entry))
+    
+    async def do_on_entry_removed(self, entry):
+        await self.playlist.record_failed(entry)
     
     # Operation handlers
 

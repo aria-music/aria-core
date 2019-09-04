@@ -39,10 +39,10 @@ class MediaSourceManager():
         uris = uri if isinstance(uri, list) else [uri]
         solvers = []
         ret = []
-        for uri in uris:
-            provider = self.get_provider(uri)
+        for u in uris:
+            provider = self.get_provider(u)
             if provider:
-                solvers.append(provider.resolve_playable(uri, self.config.cache_dir))
+                solvers.append(provider.resolve_playable(u, self.config.cache_dir))
 
         res, _ = await asyncio.wait(solvers, return_when=asyncio.ALL_COMPLETED)
         for item in res:

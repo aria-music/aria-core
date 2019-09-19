@@ -599,6 +599,14 @@ class PlayerView():
 
         await self.player.queue.assign(edited)
 
+    async def op_update_db(self):
+        gpm = self.manager.providers.get("gpm")
+        if not gpm:
+            log.error("No gpm provider")
+            return
+
+        await gpm.update()
+
 def enclose_packet(type, data=None, key=None):
     ret = {
         'type': type

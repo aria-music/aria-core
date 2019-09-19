@@ -11,12 +11,14 @@ class StoreManager():
     async def update(self, songs:Sequence[GPMSong]) -> None:
         async with aiosqlite.connect(self.db) as db:
             await db.execute("DROP TABLE IF EXISTS songs")
-            await db.execute("""CREATE TABLE IF NOT EXISTS songs (song_id text,
+            await db.execute("""CREATE TABLE IF NOT EXISTS songs (user text,
+                                                                  song_id text,
                                                                   title text,
                                                                   artist text,
                                                                   album text,
                                                                   albumArtUrl text)""")
-            await db.executemany("""INSERT INTO songs VALUES (:song_id,
+            await db.executemany("""INSERT INTO songs VALUES (:user,
+                                                              :song_id,
                                                               :title,
                                                               :artist,
                                                               :album,
@@ -32,10 +34,10 @@ class StoreManager():
 
         return [GPMSong(*song) for song in res]
 
-    async def resolve(self, song_id:str) -> Optional[GPMSong]:
+    async def resolve(self, user, song_id:str) -> Optional[GPMSong]:
         res = None
         async with aiosqlite.connect(self.db) as db:
-            cur = await db.execute("SELECT * FROM songs WHERE song_id = ?", (song_id, ))
+            cur = await db.execute("SELECT * FROM songs WHERE user = ? AND song_id = ?", (user, song_id))
             res = await cur.fetchall()
 
         return GPMSong(*res[-1]) if res else None

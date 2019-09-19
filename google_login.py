@@ -3,11 +3,16 @@ from pathlib import Path
 from gmusicapi.clients import Mobileclient
 
 
-config_dir = Path.cwd()/'config'
-auth_file = config_dir/'google.auth'
+auth_dir = Path.cwd()/'config'/'gpm'
+auth_dir.mkdir(parents=True,exist_ok=True)
 
-config_dir.mkdir(exist_ok=True)
+name = input("Enter name: ")
+# sanitize
+name = Path(name).name
+
+auth_file = auth_dir/f"{name}.auth"
 auth_file.touch()
+
 try:
     Mobileclient.perform_oauth(storage_filepath=str(auth_file), open_browser=True)
     print('Logged in to Google successfully!')

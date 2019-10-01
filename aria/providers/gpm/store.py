@@ -29,7 +29,7 @@ class StoreManager():
         query = f"%{'%'.join(keyword.split())}%"
         res = None
         async with aiosqlite.connect(self.db) as db:
-            cur = await db.execute("SELECT * FROM songs WHERE title||' '||artist||' '||album LIKE ?", (query, ))
+            cur = await db.execute("SELECT * FROM songs WHERE user||' '||title||' '||artist||' '||album LIKE ?", (query, ))
             res = await cur.fetchall()
 
         return [GPMSong(*song) for song in res]

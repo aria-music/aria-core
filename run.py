@@ -26,7 +26,10 @@ if __name__ == '__main__':
     
     player = PlayerView(config)
     player_app = web.Application()
-    player_app.add_routes([web.get('/', player.get_ws)])
+    player_app.add_routes([
+        web.get('/', player.get_ws),
+        web.post('/control', player.post_control)
+    ])
     player_app_runner = web.AppRunner(player_app)
     
     stream = StreamView(config, player)

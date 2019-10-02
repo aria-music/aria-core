@@ -17,7 +17,7 @@ log = getLogger(__name__)
 volume_match = re.compile(r"max_volume: (-?\d+\.\d+) dB")
 
 
-def generate_key(length: int = KEY_LENGTH):
+def generate_key(length:int=KEY_LENGTH):
     return ''.join(random.choice(CHARACTERS) for i in range(length))
 
 def save_file(filename: str, data: bytes):

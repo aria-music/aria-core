@@ -12,6 +12,7 @@ from aria.manager import MediaSourceManager
 from aria.player import Player
 from aria.playlist import PlaylistManager
 from aria.utils import generate_key, json_dump
+from aria.token import Token
 
 log = getLogger(__name__)
 
@@ -49,12 +50,14 @@ op_clear_queue
 op_remove (uri, index)
 op_list_queue
 op_edit_queue (queue)
+op_token
 """
 
 
 class PlayerView():
     def __init__(self, config):
         self.config = config
+        self.token = Token()
         self.loop = asyncio.get_event_loop()
         self.pool = ThreadPoolExecutor(max_workers=4)
 
@@ -100,9 +103,27 @@ class PlayerView():
                     await ws.close()
                     break
                     
-                self.loop.create_task(self.handle_message(ws, msg.json()))
+                self.loop.create_task(self.handle_message(json_message, ws))
 
         return ws
+
+    async def post_control(self, request):
+        try:
+            json_message = await request.json()
+        except:
+            log.error("Invalid message!")
+            return web.Response(status=400)
+            
+        token = json_message.get('token')
+        if not token or not self.token.is_valid(token):
+            log.error("Invalid token!")
+            return web.Response(status=403)
+        
+        ret = await self.handle_message(json_message)
+        if ret:
+            return web.json_response(ret)
+
+        return web.Response()
 
     async def on_open_message(self, ws, key):
         await self.send_json(key, ws, enclose_packet('hello', key=key))
@@ -137,7 +158,7 @@ class PlayerView():
 
         log.debug(f'Current player: {len(self.connections)} connections')
 
-    async def handle_message(self, ws, payload: dict):
+    async def handle_message(self, payload:dict, ws=None):
         op = payload.get('op')
         key = payload.get('key')
         data = payload.get('data')
@@ -165,11 +186,12 @@ class PlayerView():
 
         log.debug(f'Handling op {op} with data {data}')
         ret = await handler(**params)
-        if ret:
+        if ws != None and ret: # bool(ws) sucks
             log.debug(f'Returning {ret}')
             await self.send_json(key, ws, ret)
 
         log.info(f'task op {op} done.')
+        return ret
     
     # Event callbacks
     # Better using EventEmitter?
@@ -460,8 +482,8 @@ class PlayerView():
         -------
         None
         """
-        await self.player.queue.clear()
-        await self.op_queue(data)
+        # await self.player.queue.clear()
+        await self.op_queue({ **data, 'head': True })
         await self.player.skip()
 
     async def op_pause(self):
@@ -606,6 +628,9 @@ class PlayerView():
             return
 
         await gpm.update()
+
+    async def op_token(self):
+        return enclose_packet('token', { 'token': self.token.generate() })
 
 def enclose_packet(type, data=None, key=None):
     ret = {

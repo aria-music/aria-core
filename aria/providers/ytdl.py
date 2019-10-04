@@ -95,7 +95,7 @@ class YTDLProvider(Provider):
                                          entry.get('title') or '',
                                          entry.get('webpage_url') or '',
                                          entry.get('thumbnail') or '',
-                                         entry))
+                                         entry=entry))
         else:
             if 'is_live' in res and res['is_live'] == True:
                 pass
@@ -104,7 +104,7 @@ class YTDLProvider(Provider):
                                         res.get('title') or '',
                                         res.get('webpage_url') or '',
                                         res.get('thumbnail') or '',
-                                        res))
+                                        entry=res))
 
         return ret
 

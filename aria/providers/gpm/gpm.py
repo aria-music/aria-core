@@ -180,4 +180,10 @@ class GPMProvider(Provider):
     def enclose_entry(self, entry:GPMSong) -> EntryOverview:
         title = f'{entry.title} - {entry.artist}'
         uri = get_song_uri(entry)
-        return EntryOverview(self.name, title, uri, entry.albumArtUrl, entry._asdict())
+        art = (entry.albumArtUrl + "=s460-c-e100-rwu-v1") if entry.albumArtUrl else ""
+        art_small = (entry.albumArtUrl + "=s158-c-e100-rwu-v1") if entry.albumArtUrl else ""
+        return EntryOverview(
+            self.name, title, uri,
+            art, art_small,
+            entry._asdict()
+        )

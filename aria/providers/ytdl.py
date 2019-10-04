@@ -90,7 +90,7 @@ class YTDLProvider(Provider):
             for entry in res['entries']:
                 if 'is_live' in entry and entry['is_live'] == True:
                     continue
-
+                
                 ret.append(EntryOverview(res['extractor'].split(':')[0],
                                          entry.get('title') or '',
                                          entry.get('webpage_url') or '',

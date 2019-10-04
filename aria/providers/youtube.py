@@ -43,10 +43,11 @@ class YoutubeProvider(Provider):
                     video_id = item['id']['videoId']
                     title = item['snippet']['title']
                     thumbnail = item['snippet']['thumbnails']['high']['url']
+                    thumbnail_small = item['snippet']['thumbnails']['default']['url']
                 except:
                     log.error('missing key: ', exc_info=True)
                 
-                ret.append(EntryOverview(self.name, title, f'https://www.youtube.com/watch?v={video_id}', thumbnail))
+                ret.append(EntryOverview(self.name, title, f'https://www.youtube.com/watch?v={video_id}', thumbnail, thumbnail_small))
 
         return ret
     async def resolve_playable(self, uri, cache_dir):

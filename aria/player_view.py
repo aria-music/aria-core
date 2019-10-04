@@ -161,11 +161,18 @@ class PlayerView():
     async def handle_message(self, payload:dict, ws=None):
         op = payload.get('op')
         key = payload.get('key')
+        postback = payload.get('postback') or ""
         data = payload.get('data')
 
         if not isinstance(op, str):
             log.error(f'Invalid op type. Expected str: {op}')
             return
+
+        if isinstance(postback, str):
+            postback = postback[:100]
+        else:
+            log.error(f"postback is not a string. Ignore: {postback}")
+            postback = ""
         
         handler = getattr(self, f'op_{op}', None)
         if not handler:
@@ -186,6 +193,8 @@ class PlayerView():
 
         log.debug(f'Handling op {op} with data {data}')
         ret = await handler(**params)
+        ret = { 'postback': postback, **ret }
+
         if ws != None and ret: # bool(ws) sucks
             log.debug(f'Returning {ret}')
             await self.send_json(key, ws, ret)

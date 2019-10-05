@@ -119,7 +119,7 @@ class GPMProvider(Provider):
 
         return [self.enclose_entry(entry) for entry in ret[:50]]
 
-    async def update(self, force=False):
+    async def update(self, force=False, user=None):
         if not force and not self.update_lock.is_set():
             log.error('Update ongoing. skipping...')
             return
@@ -127,7 +127,11 @@ class GPMProvider(Provider):
         self.update_lock.clear()
         user_songs = {}
 
-        for name, cli in self.gpm.items():
+        to_update = self.gpm
+        if user and user in self.gpm:
+            to_update = {user: self.gpm[user]}
+
+        for name, cli in to_update.items():
             res = await self.loop.run_in_executor(self.pool, cli.get_all_songs)
             log.info(f'{name}: Retrieved {len(res)} songs')
             if res:

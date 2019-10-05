@@ -193,7 +193,8 @@ class PlayerView():
 
         log.debug(f'Handling op {op} with data {data}')
         ret = await handler(**params)
-        ret = { 'postback': postback, **ret }
+        if ret:
+            ret = { 'postback': postback, **ret }
 
         if ws != None and ret: # bool(ws) sucks
             log.debug(f'Returning {ret}')
@@ -630,13 +631,15 @@ class PlayerView():
 
         await self.player.queue.assign(edited)
 
-    async def op_update_db(self):
+    async def op_update_db(self, data):
         gpm = self.manager.providers.get("gpm")
         if not gpm:
             log.error("No gpm provider")
             return
 
-        await gpm.update()
+        user = data.get('user')
+        log.info(f'Update db for {user or "all users"}')
+        await gpm.update(user=user)
 
     async def op_token(self):
         return enclose_packet('token', { 'token': self.token.generate() })

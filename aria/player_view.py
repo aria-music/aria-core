@@ -185,9 +185,9 @@ class PlayerView():
         if 'ws' in reqs:
             params['ws'] = ws
         if 'key' in reqs:
-            params['key'] = key
+            params['key'] = key or ""
         if 'data' in reqs:
-            params['data'] = data
+            params['data'] = data or {}
         if 'pre' in reqs:
             params['pre'] = partial(enclose_packet, key=key)
 

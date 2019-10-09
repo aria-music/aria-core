@@ -182,8 +182,12 @@ class GPMProvider(Provider):
         user_songs = {}
 
         to_update = self.gpm
-        if user and user in self.gpm:
-            to_update = { user: self.gpm[user] }
+        if user:
+            if user in self.gpm:
+                to_update = { user: self.gpm[user] }
+            else:
+                log.error(f"User not found: {user}")
+                return
 
         for name, cli in to_update.items():
             res = await self.loop.run_in_executor(self.pool, cli.get_all_songs)

@@ -19,6 +19,8 @@ class StoreManager():
 
             if user:
                 await db.execute("DELETE FROM songs WHERE user = ?", (user, ))
+            else:
+                await db.execute("DROP TABLE IF EXISTS songs")
             
             await db.executemany("""INSERT INTO songs VALUES (:user,
                                                               :song_id,

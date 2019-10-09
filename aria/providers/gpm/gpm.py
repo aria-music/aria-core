@@ -178,9 +178,6 @@ class GPMProvider(Provider):
             log.error('Update ongoing. skipping...')
             return
 
-        self.update_lock.clear()
-        user_songs = {}
-
         to_update = self.gpm
         if user:
             if user in self.gpm:
@@ -188,6 +185,9 @@ class GPMProvider(Provider):
             else:
                 log.error(f"User not found: {user}")
                 return
+
+        self.update_lock.clear()
+        user_songs = {}
 
         for name, cli in to_update.items():
             res = await self.loop.run_in_executor(self.pool, cli.get_all_songs)

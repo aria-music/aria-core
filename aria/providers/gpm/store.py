@@ -8,15 +8,18 @@ class StoreManager():
     def __init__(self, db_file=None):
         self.db = db_file or 'config/gpm.sqlite3'
 
-    async def update(self, songs:Sequence[GPMSong]) -> None:
+    async def update(self, songs:Sequence[GPMSong], user:str=None) -> None:
         async with aiosqlite.connect(self.db) as db:
-            await db.execute("DROP TABLE IF EXISTS songs")
             await db.execute("""CREATE TABLE IF NOT EXISTS songs (user text,
                                                                   song_id text,
                                                                   title text,
                                                                   artist text,
                                                                   album text,
                                                                   albumArtUrl text)""")
+
+            if user:
+                await db.execute("DELETE FROM songs WHERE user = ?", (user, ))
+            
             await db.executemany("""INSERT INTO songs VALUES (:user,
                                                               :song_id,
                                                               :title,

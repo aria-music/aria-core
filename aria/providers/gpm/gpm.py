@@ -207,7 +207,7 @@ class GPMProvider(Provider):
                                 album_url)
                 entries.append(entry)
         try:
-            await self.store.update(entries)
+            await self.store.update(entries, user)
         except:
             log.error('Failed to update gpm database')
         

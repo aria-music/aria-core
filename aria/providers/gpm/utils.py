@@ -12,8 +12,8 @@ GPMSong = namedtuple('GPMSong', ('user', 'song_id', 'title', 'artist', 'album', 
 def id_to_uri(song_id:str):
     return f'gpm:track:{song_id}'
 
-def get_song_uri(song: GPMSong) -> str:
-    return f"gpm:track:{song.user}:{song.song_id}"
+def get_song_uri(song: GPMSong, store=False) -> str:
+    return f"gpm:{'storeTrack' if store else 'track'}:{song.user}:{song.song_id}"
 
 def uri_to_id(uri:str):
     return uri.split(':')[3]

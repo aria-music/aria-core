@@ -10,17 +10,16 @@ class StoreManager():
 
     async def update(self, songs:Sequence[GPMSong], user:str=None) -> None:
         async with aiosqlite.connect(self.db) as db:
-            await db.execute("""CREATE TABLE IF NOT EXISTS songs (user text,
+            if user:
+                await db.execute("DELETE FROM songs WHERE user = ?", (user, ))
+            else:
+                await db.execute("DROP TABLE IF EXISTS songs")
+                await db.execute("""CREATE TABLE IF NOT EXISTS songs (user text,
                                                                   song_id text,
                                                                   title text,
                                                                   artist text,
                                                                   album text,
                                                                   albumArtUrl text)""")
-
-            if user:
-                await db.execute("DELETE FROM songs WHERE user = ?", (user, ))
-            else:
-                await db.execute("DROP TABLE IF EXISTS songs")
             
             await db.executemany("""INSERT INTO songs VALUES (:user,
                                                               :song_id,

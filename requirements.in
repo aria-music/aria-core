@@ -1,5 +1,5 @@
-discord.py[voice]
 gmusicapi
 aiosqlite
 youtube_dl
 aiohttp
+aiohttp_cors

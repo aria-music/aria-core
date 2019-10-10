@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+import aiohttp_cors
 from aiohttp import web
 
 from aria.config import Config
@@ -26,10 +27,18 @@ if __name__ == '__main__':
     
     player = PlayerView(config)
     player_app = web.Application()
-    player_app.add_routes([
-        web.get('/', player.get_ws),
-        web.post('/control', player.post_control)
-    ])
+    cors = aiohttp_cors.setup(player_app, defaults={
+        "*": aiohttp_cors.ResourceOptions(
+            allow_credentials=False,
+            expose_headers="*",
+            allow_headers="*"
+        )
+    })
+
+    player_app.router.add_route('GET', '/', player.get_ws)
+    control = cors.add(player_app.router.add_resource('/control'))
+    cors.add(control.add_route('POST', player.post_control))
+    
     player_app_runner = web.AppRunner(player_app)
     
     stream = StreamView(config, player)

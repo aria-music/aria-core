@@ -22,7 +22,7 @@ class FFMpegPlayer():
                     '-ar', '48000',
                     '-ac', '2',
                     '-vn',
-                    '-af', f'volume={-entry.volume}dB, volume=0.25',
+                    '-af', f'volume={-entry.volume}dB, volume=0.10',
                     '-loglevel', 'quiet',
                     'pipe:1'
                 ],

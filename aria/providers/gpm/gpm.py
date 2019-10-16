@@ -245,7 +245,7 @@ class GPMProvider(Provider):
         art_small = (entry.albumArtUrl + "=s158-c-e100-rwu-v1") if entry.albumArtUrl else ""
         return EntryOverview(
             self.name, title, uri,
-            entry.albumArtUrl, art_small,
+            entry.albumArtUrl.replace("http://", "https://"), art_small.replace("http://", "https://"),
             entry._asdict()
         )
 
@@ -254,5 +254,5 @@ class GPMProvider(Provider):
         return GPMSong(
             'store', track['storeId'],
             track['title'], track['artist'], track['album'],
-            album_art
+            album_art.replace("http://", "https://")
         )

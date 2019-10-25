@@ -56,7 +56,7 @@ class StreamView():
             self.loop.create_task(self.send_bytes(key, ws, packet))
 
     async def send_bytes(self, key, ws, packet):
-        if ws.closed:
+        if ws.exception() != None or ws.closed:
             log.info('Deleting closed connection...')
             self.delete_connection(key)
         else:

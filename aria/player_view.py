@@ -137,7 +137,7 @@ class PlayerView():
             self.loop.create_task(self.send_json(key, ws, packet))
     
     async def send_json(self, key, ws, json):
-        if ws.closed:
+        if ws.exception() != None or ws.closed:
             log.info('Deleting closed connection...')
             self.delete_connection(key)
         else:
@@ -197,9 +197,9 @@ class PlayerView():
             ret = { 'postback': postback, **ret }
 
         if ws != None and ret: # bool(ws) sucks
-            log.debug(f'Returning {ret}')
             await self.send_json(key, ws, ret)
 
+        log.debug(f'Returning {ret}')
         log.info(f'task op {op} done.')
         return ret
     

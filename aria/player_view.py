@@ -3,15 +3,13 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from inspect import signature
 from logging import getLogger
-from threading import Thread
-from time import sleep
 
 from aiohttp import WSMsgType, web
 
 from aria.manager import MediaSourceManager
 from aria.player import Player
 from aria.playlist import PlaylistManager
-from aria.utils import generate_key, json_dump
+from aria.utils import generate_key, json_dump, get_pretty_object
 from aria.token import Token
 
 log = getLogger(__name__)
@@ -132,7 +130,7 @@ class PlayerView():
         await self.send_json(key, ws, enclose_packet('event_playlists_change', {'playlists': await self.playlist.enclose_playlists()}))
 
     async def broadcast(self, packet):
-        log.debug(f'Broadcasting: {packet}')
+        log.debug(f'Broadcasting: {str(get_pretty_object(packet))}')
         for key, ws in self.connections.items():
             self.loop.create_task(self.send_json(key, ws, packet))
     
@@ -199,7 +197,7 @@ class PlayerView():
         if ws != None and ret: # bool(ws) sucks
             await self.send_json(key, ws, ret)
 
-        log.debug(f'Returning {ret}')
+        log.debug(f'Returning {str(get_pretty_object(ret))}')
         log.info(f'task op {op} done.')
         return ret
     

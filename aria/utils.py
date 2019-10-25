@@ -7,6 +7,7 @@ from functools import partial
 from logging import getLogger
 from pathlib import Path
 from string import ascii_letters, digits
+from typing import Union
 
 from aria.models import EntryOverview
 
@@ -19,6 +20,17 @@ volume_match = re.compile(r"max_volume: (-?\d+\.\d+) dB")
 
 def generate_key(length:int=KEY_LENGTH):
     return ''.join(random.choice(CHARACTERS) for i in range(length))
+
+def get_pretty_object(obj):
+    if isinstance(obj, dict):
+        ret = {}
+        for k, v in obj.items():
+            ret[k] = get_pretty_object(v)
+        return ret
+    elif isinstance(obj, (list, tuple)) and len(obj):
+        return f"<{len(obj)} x {type(obj)} like {get_pretty_object(obj[0])}>"
+    else:
+        return obj    
 
 def save_file(filename: str, data: bytes):
     with Path(filename).open('wb') as f:

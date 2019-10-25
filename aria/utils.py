@@ -28,7 +28,7 @@ def get_pretty_object(obj):
             ret[k] = get_pretty_object(v)
         return ret
     elif isinstance(obj, (list, tuple)) and len(obj):
-        return f"<{len(obj)} x {type(obj)} like {get_pretty_object(obj[0])}>"
+        return f"<{len(obj)} x {type(obj[0])} like {get_pretty_object(obj[0])}>"
     else:
         return obj    
 

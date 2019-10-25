@@ -1,0 +1,7 @@
+POST http://unix:/tmp/aria_player.sock:/control
+
+{
+    "op": "state",
+    "token": "testtokenippudo",
+    "postback":"fuck"
+}

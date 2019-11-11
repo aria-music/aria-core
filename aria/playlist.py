@@ -5,6 +5,7 @@ from logging import getLogger
 from pathlib import Path
 from random import choice
 from typing import Sequence, Union, Optional
+from collections import deque
 
 from aria.exceptions import EmptyPlaylist
 from aria.models import EntryOverview, PlayableEntry
@@ -136,6 +137,36 @@ class Playlist():
         except:
             log.error(f'Failed to save playlist to file {file}: ', exc_info=True)
 
+
+class History():
+    def __init__(self, view, name):
+        self.view = view
+        self.name = name
+        
+        self.list = deque(maxlen=50)
+
+    def __getattr__(self, _):
+        return self.nop
+
+    def nop(self, *_, **__):
+        log.error("Operation not permitted on History object!")
+
+    def add_history(self, entry:EntryOverview):
+        self.list.appendleft(entry)
+        self.view.on_playlists_change()
+        self.view.on_playlist_entry_change(self.name)
+
+    async def get_thumbnails(self):
+        # deque is a linked list so we do this way
+        return [i.entry.thumbnail for i in self.list][:4]
+
+    async def get_entries(self):
+        return [i.entry for i in self.list]
+
+    async def get_playable_entries(self):
+        return [i for i in self.list]
+
+
 class PlaylistManager():
     def __init__(self, view, config, provider_manager):
         self.view = view
@@ -147,6 +178,7 @@ class PlaylistManager():
 
         self.lists = {}
         self.likes = None # special playlist
+        self.history = None # special playlist
 
         self.failed_file = Path(self.playlists_dir)/"failed.txt"
         self.failed_file_lock = asyncio.Lock()
@@ -154,6 +186,7 @@ class PlaylistManager():
         # self.loop.create_task(self.load_playlists())
         self.do_load_playlists()
         self.init_likes()
+        self.init_history()
 
     async def load_playlists(self):
         await self.loop.run_in_executor(self.pool, self.do_load_playlists)
@@ -184,6 +217,10 @@ class PlaylistManager():
             self.lists['Likes'] = self.likes
 
         self.loop.create_task(self.likes.get_entries())
+
+    def init_history(self):
+        self.history = History(self.view, 'History')
+        self.lists['History'] = self.history
         
     @property
     def list(self):
@@ -192,14 +229,21 @@ class PlaylistManager():
     async def enclose_playlists(self):
         let_enclose = [pl.get_thumbnails() for pl in self.lists.values()]
         await asyncio.wait(let_enclose, return_when=asyncio.ALL_COMPLETED)
-        ret = [{
-            'name': self.likes.name,
-            'length': len(self.likes.list),
-            'thumbnails': await self.likes.get_thumbnails()
-        }]
+        ret = [
+            {
+                'name': self.likes.name,
+                'length': len(self.likes.list),
+                'thumbnails': await self.likes.get_thumbnails()
+            },
+            {
+                'name': self.history.name,
+                'length': len(self.history.list),
+                'thumbnails': await self.history.get_thumbnails() 
+            }
+        ]
 
         for name, pl in self.lists.items():
-            if not pl == self.likes:
+            if not pl in [self.likes, self.history]:
                 ret.append({
                     'name': name,
                     'length': len(pl.list),
@@ -246,7 +290,7 @@ class PlaylistManager():
         return Playlist.create(self.view, name, Path(self.playlists_dir)/f'{name}.aria', self.prov, self.pool, self.loop)
 
     async def delete(self, name:str):
-        if name == 'Likes':
+        if name in ['Likes', 'History']:
             log.error('You cannot delete Likes list!!!')
             return
 

@@ -183,6 +183,7 @@ class Player():
                 if not self.current:
                     return
 
+                self.view.playlist.history.add_history(self.current)
                 self.change_state('playing')
                 self.stream.play(self.current)
 

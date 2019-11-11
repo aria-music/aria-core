@@ -10,3 +10,4 @@
 !/config/config_default.json
 /caches/*
 /playlists/*
+test.py

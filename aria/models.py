@@ -9,7 +9,6 @@ class PlayerState(IntEnum):
 class EntryOverview():
     def __init__(self, source:str, title:str,
                     uri:str, thumbnail:str=None,
-
                     thumbnail_small:str=None, entry:dict=None):
         self.source = source
         self.title = title
@@ -17,6 +16,7 @@ class EntryOverview():
         self.thumbnail = thumbnail or ''
         self.thumbnail_small = thumbnail_small or self.thumbnail
         self.entry = entry
+        self.is_liked = False
 
     def as_dict(self):
         return {
@@ -25,6 +25,7 @@ class EntryOverview():
             "uri": self.uri,
             "thumbnail": self.thumbnail,
             "thumbnail_small": self.thumbnail_small,
+            "is_liked": self.is_liked,
             "entry": self.entry if self.source == 'gpm' else None # temporary
         }
 

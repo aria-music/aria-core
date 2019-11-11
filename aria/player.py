@@ -159,6 +159,8 @@ class PlayerQueue():
         
     @property
     def list(self) -> Sequence[EntryOverview]:
+        for item in self.queue:
+            item.entry.is_liked = self.player.view.playlist.is_liked(item.uri)
         return [item.entry for item in self.queue]
 
 

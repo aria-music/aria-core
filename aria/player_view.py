@@ -475,6 +475,7 @@ class PlayerView():
                 self.playlist.like(entry)
 
         self.on_player_state_change()
+        self.on_queue_change()
 
     async def op_play(self, data):
         """

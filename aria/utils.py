@@ -15,7 +15,7 @@ CHARACTERS = ascii_letters + digits
 KEY_LENGTH = 40
 
 log = getLogger(__name__)
-volume_match = re.compile(r"max_volume: (-?\d+\.\d+) dB")
+volume_match = re.compile(r"mean_volume: (-?\d+\.\d+) dB")
 
 
 def generate_key(length:int=KEY_LENGTH):
@@ -83,8 +83,8 @@ async def get_volume(filename:str):
         _, stderr = await ffmpeg.communicate()
         log.debug(stderr)
         ret = float(volume_match.findall(stderr.decode('utf-8'))[0])
-        log.info(f'Got max_volume: {ret}')
+        log.info(f'Got mean_volume: {ret}')
     except:
-        log.error('Failed to get max_volume:', exc_info=True)
+        log.error('Failed to get mean_volume:', exc_info=True)
         
     return ret or 0

@@ -273,28 +273,30 @@ class PlayerView():
         -------
         {
             "res": "search",
-            "data": [
-                {
-                    "source": "gpm",
-                    "title": "Region - Mili",
-                    "uri": "gpm:track:be223a86-fd8d-3120-ad84-77c81f784865",
-                    "thumbnail": "",
-                    "entry": {
-                        "song_id": "be223a86-fd8d-3120-ad84-77c81f784865",
-                        "title": "Region",
-                        "artist": "Mili",
-                        "album": "Rightfully",
-                        "albumArtUrl": ""
+            "data": {
+                "result": [
+                    {
+                        "source": "gpm",
+                        "title": "Region - Mili",
+                        "uri": "gpm:track:be223a86-fd8d-3120-ad84-77c81f784865",
+                        "thumbnail": "",
+                        "entry": {
+                            "song_id": "be223a86-fd8d-3120-ad84-77c81f784865",
+                            "title": "Region",
+                            "artist": "Mili",
+                            "album": "Rightfully",
+                            "albumArtUrl": ""
+                        }
+                    },
+                    {
+                        "source": "youtube",
+                        "title": "Goblin Slayer OP/Opening - Rightfully / Mili [Full]",
+                        "uri": "https://www.youtube.com/watch?v=7z4WJAEG3u8",
+                        "thumbnail": "https://i.ytimg.com/vi/7z4WJAEG3u8/hqdefault.jpg",
+                        "entry": null
                     }
-                },
-                {
-                    "source": "youtube",
-                    "title": "Goblin Slayer OP/Opening - Rightfully / Mili [Full]",
-                    "uri": "https://www.youtube.com/watch?v=7z4WJAEG3u8",
-                    "thumbnail": "https://i.ytimg.com/vi/7z4WJAEG3u8/hqdefault.jpg",
-                    "entry": null
-                }
-            ]
+                ]
+            }
         }
         """
         query = data.get('query')
@@ -304,7 +306,9 @@ class PlayerView():
             return
         
         try_resolve = await self.manager.resolve(query)
-        ret = try_resolve or await self.manager.search(query, provider)
+        ret = {
+            'result': try_resolve or await self.manager.search(query, provider)
+        }
         return enclose_packet('search', ret)
         
     async def op_playlists(self):

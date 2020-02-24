@@ -9,6 +9,7 @@ COPY . /usr/src/aria-core
 WORKDIR /usr/src/aria-core
 RUN pip install -r requirements.txt
 
-VOLUME ./config ./caches
+VOLUME /usr/src/aria/config
+VOLUME /usr/src/aria/caches
 
 CMD [ "python", "run.py" ]

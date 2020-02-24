@@ -1,0 +1,12 @@
+version: "3"
+services: 
+  core:
+    build: .
+    image: aria-core:latest
+    volumes:
+    - ./config:/usr/src/aria/config:ro
+    - aria-media-caches:/usr/src/aria/caches
+    restart: always
+
+volumes:
+  aria-media-caches:

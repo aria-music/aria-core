@@ -157,11 +157,11 @@ class PlayerQueue():
 
         self.on_queue_change()
         
-    @property
-    def list(self) -> Sequence[EntryOverview]:
-        for item in self.queue:
-            item.entry.is_liked = self.player.view.playlist.is_liked(item.uri)
-        return [item.entry for item in self.queue]
+    async def list(self) -> Sequence[EntryOverview]:
+        ret = [i.entry for i in self.queue]
+        for item in ret:
+            item.is_liked = await self.player.view.playlist.is_liked(item.uri)
+        return ret
 
 
 class Player():
@@ -219,21 +219,20 @@ class Player():
 
             self.loop.create_task(self.queue.add_entry([self.current] * count, head=True))
 
-    @property
-    def list(self):
-        return self.queue.list
+    async def list(self):
+        return await self.queue.list()
 
     def change_state(self, state_to:str):
         # MUST BE CALLED WITH LOCK ACQUIRED!!!
         self.state = PlayerState[state_to.upper()]
         self.view.on_player_state_change()        
 
-    def enclose_state(self):
+    async def enclose_state(self):
         return {
             'state': self.state.name.lower(),
             'entry': {
                 **self.current.entry.as_dict(),
-                'is_liked': self.view.playlist.is_liked(self.current.entry.uri),
+                'is_liked': await self.view.playlist.is_liked(self.current.entry.uri),
                 'duration': self.current.duration,
                 'position': self.stream.current_position
             } if not self.state == PlayerState.STOPPED else None

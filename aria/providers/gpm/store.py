@@ -1,47 +1,55 @@
 from typing import Sequence, Optional
+from aiohttp import ClientSession
+from logging import getLogger
 
-import aiosqlite
 from .utils import GPMSong
+from aria.database import Database
 
+log = getLogger(__name__)
+
+endpoint = "http://localhost:8080/gpm"
 
 class StoreManager():
     def __init__(self, db_file=None):
-        self.db = db_file or 'config/gpm.sqlite3'
+        # self.db = db_file or 'config/gpm.sqlite3'
+        # self.session = ClientSession()
+        self.db = Database()
 
-    async def update(self, songs:Sequence[GPMSong], user:str=None) -> None:
-        async with aiosqlite.connect(self.db) as db:
-            if user:
-                await db.execute("DELETE FROM songs WHERE user = ?", (user, ))
-            else:
-                await db.execute("DROP TABLE IF EXISTS songs")
-                await db.execute("""CREATE TABLE IF NOT EXISTS songs (user text,
-                                                                  song_id text,
-                                                                  title text,
-                                                                  artist text,
-                                                                  album text,
-                                                                  albumArtUrl text)""")
-            
-            await db.executemany("""INSERT INTO songs VALUES (:user,
-                                                              :song_id,
-                                                              :title,
-                                                              :artist,
-                                                              :album,
-                                                              :albumArtUrl)""", songs)
-            await db.commit()
+    async def update(self, songs:Sequence[dict], user:str) -> None:
+        try:
+            await self.db.update_gpm(songs, user)
+            log.info(f"updated GPM for user: {user}")
+        except:
+            log.error(f"failed to update GPM for user {user}: ", exc_info=True)
 
-    async def search(self, keyword:str) -> Sequence[GPMSong]:
-        query = f"%{'%'.join(keyword.split())}%"
-        res = None
-        async with aiosqlite.connect(self.db) as db:
-            cur = await db.execute("SELECT * FROM songs WHERE user||' '||title||' '||artist||' '||album LIKE ?", (query, ))
-            res = await cur.fetchall()
+    async def search(self, keyword:str):
+        payload = None
+        try:
+            payload = await self.db.search_gpm(keyword)
+            return [GPMSong(
+                    user=e.get("gpmUser"),
+                    song_id=e.get("id"),
+                    title=e.get("title"),
+                    artist=e.get("artist"),
+                    album=e.get("album"),
+                    albumArtUrl=e.get("thumbnail"),
+                    is_liked=False
+            ) for e in payload["results"]]
+        except:
+            log.error("failed to search GPM: ", exc_info=True)
 
-        return [GPMSong(*song) for song in res]
-
-    async def resolve(self, user, song_id:str) -> Optional[GPMSong]:
-        res = None
-        async with aiosqlite.connect(self.db) as db:
-            cur = await db.execute("SELECT * FROM songs WHERE user = ? AND song_id = ?", (user, song_id))
-            res = await cur.fetchall()
-
-        return GPMSong(*res[-1]) if res else None
+    async def resolve(self, uri: str) -> Optional[GPMSong]:
+        payload = None
+        try:
+            payload = await self.db.resolve_gpm(uri.strip())
+            return GPMSong(
+                user=payload["meta"]["gpmUser"],
+                song_id=payload["meta"]["id"],
+                title=payload["meta"]["title"],
+                artist=payload["meta"]["artist"],
+                album=payload["meta"]["album"],
+                albumArtUrl=payload["meta"]["thumbnail"],
+                is_liked=payload["liked"]
+            )
+        except:
+            log.error(f"failed to resolve {uri.strip()}: ", exc_info=True)

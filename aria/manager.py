@@ -4,6 +4,7 @@ from typing import Sequence, Optional
 
 from aria import providers
 from aria.models import EntryOverview, PlayableEntry, Provider
+from aria.database import Database
 
 log = getLogger(__name__)
 
@@ -11,6 +12,8 @@ log = getLogger(__name__)
 class MediaSourceManager():
     def __init__(self, config):
         self.config = config
+        self.db = Database()
+
         self.providers = {}
         self.resolvers = {}
         self.init_providers()
@@ -33,7 +36,7 @@ class MediaSourceManager():
 
     async def resolve(self, uri) -> Sequence[EntryOverview]:
         provider = self.get_provider(uri)
-        return (await provider.resolve(uri)) if provider else []
+        return (await provider.resolve(uri.strip())) if provider else []
 
     async def resolve_playable(self, uri) -> Sequence[PlayableEntry]:
         uris = uri if isinstance(uri, list) else [uri]

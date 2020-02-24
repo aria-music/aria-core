@@ -1,148 +1,22 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from functools import partial
+from collections import deque
 from logging import getLogger
 from pathlib import Path
 from random import choice
-from typing import Sequence, Union, Optional
-from collections import deque
+from typing import Optional
 
-from aria.exceptions import EmptyPlaylist
+from aiohttp import ClientSession
+
+from aria.database import Database
 from aria.models import EntryOverview, PlayableEntry
 
 log = getLogger(__name__)
-
-
-class Playlist():
-    def __init__(self, view, name, file:Union[str, Path], provider, pool=None, loop=None):
-        self.view = view
-        self.name = name
-        self.file = file
-        self.prov = provider
-        self.pool = pool or ThreadPoolExecutor(max_workers=8)
-        self.loop = loop or asyncio.get_event_loop()
-        
-        self.lock = asyncio.Lock(loop=self.loop)
-        self.list = {}
-
-        #self.loop.create_task(self.load_file())
-        self.do_load_file()
-
-    @classmethod
-    def create(cls, view, name, filename, provider, pool, loop):
-        file = Path(filename)
-        file.touch()
-
-        return cls(view, name, filename, provider, pool, loop)
-
-    def add(self, entry:Union[Sequence[EntryOverview], EntryOverview]):
-        entries = entry if isinstance(entry, list) else [entry]
-        changed = False
-
-        for item in entries:
-            if isinstance(item, EntryOverview):
-                self.list[item.uri.strip()] = item
-                changed = True
-            else:
-                stripped = item.uri.stripped()
-                if stripped and stripped not in self.list.keys():
-                    self.list[stripped] = None
-                    changed = True
-        
-        if changed:
-            self.loop.create_task(self.save_file())
-            self.view.on_playlists_change()
-            self.view.on_playlist_entry_change(self.name)
-    
-    def remove(self, entry:Union[str, list]):
-        entries = entry if isinstance(entry, list) else [entry]
-        removed = []
-
-        for item in entries:
-            stripped = item.strip()
-            if stripped and stripped in self.list.keys():
-                self.list.pop(stripped)
-                removed.append(stripped)
-        
-        self.loop.create_task(self.save_file())
-        self.view.on_playlists_change()
-        self.view.on_playlist_entry_change(self.name)
-        self.view.on_entry_removed(removed)
-
-    async def random(self):
-        try:
-            key, val = choice(list(self.list.items()))
-        except:
-            log.error('Playlist is empty!')
-            raise EmptyPlaylist()
-
-        if not val:
-            val = await self.fill_resolve(key)
-        return key, val
-
-    async def fill_resolve(self, key):
-        if self.list[key]:
-            return
-        
-        ret = await self.prov.resolve(key)
-        if not len(ret) == 1:
-            log.error('Something went wrong...?')
-            self.remove(key)
-            return
-
-        self.list[key] = ret[0]
-        return self.list[key]
-
-    async def get_thumbnails(self):
-        need_resolve = [self.fill_resolve(k) for k, v in list(self.list.items())[:4] if not v]
-        # log.debug(f'{self.name}: {len(need_resolve)} entries are incomplete')
-        if need_resolve:
-            await asyncio.wait(need_resolve, return_when=asyncio.ALL_COMPLETED)
-
-        return [v.thumbnail for k, v in list(self.list.items())[:4] if v]
-
-    async def get_entries(self) -> Sequence[EntryOverview]:
-        unresolved = [self.fill_resolve(k) for k, v in self.list.items() if not v]
-        if unresolved:
-            await asyncio.wait(unresolved, return_when=asyncio.ALL_COMPLETED)
-        return [item for item in self.list.values() if item]
-
-    async def get_playable_entries(self) -> Sequence[PlayableEntry]:
-        return await self.view.manager.resolve_playable(await self.get_entries())
-
-    async def load_file(self):
-        async with self.lock:
-            await self.loop.run_in_executor(self.pool, self.do_load_file)
-
-    def do_load_file(self):
-        file = Path(self.file) if isinstance(self.file, str) else Path(self.file)
-        try:
-            with file.open('r') as f:
-                for line in f:
-                    stripped = line.strip()
-                    if stripped:
-                        self.list[stripped] = None
-        except:
-            log.error(f'Failed to load playlist from file {file}: ', exc_info=True)
-
-    async def save_file(self):
-        async with self.lock:
-            await self.loop.run_in_executor(self.pool, self.do_save_file)
-
-    def do_save_file(self):
-        file = Path(self.file) if isinstance(self.file, str) else Path(self.file)
-        try:
-            with file.open('w') as f:
-                f.write('\n'.join(self.list.keys()))
-        except:
-            log.error(f'Failed to save playlist to file {file}: ', exc_info=True)
-
+endpoint = "http://localhost:8080"
 
 class History():
     def __init__(self, view, name):
         self.view = view
         self.name = name
-        
         self.list = deque(maxlen=50)
 
     def __getattr__(self, _):
@@ -171,105 +45,86 @@ class PlaylistManager():
     def __init__(self, view, config, provider_manager):
         self.view = view
         self.prov = provider_manager
-        self.playlists_dir = config.playlists_dir
         self.loop = asyncio.get_event_loop()
-        self.pool = ThreadPoolExecutor(max_workers=4)
         self.lock = asyncio.Lock()
+        self.db = Database()
 
-        self.lists = {}
         self.likes = None # special playlist
-        self.history = None # special playlist
-
-        self.failed_file = Path(self.playlists_dir)/"failed.txt"
-        self.failed_file_lock = asyncio.Lock()
-
-        # self.loop.create_task(self.load_playlists())
-        self.do_load_playlists()
-        self.init_likes()
-        self.init_history()
-
-    async def load_playlists(self):
-        await self.loop.run_in_executor(self.pool, self.do_load_playlists)
-
-    def do_load_playlists(self):
-        pl_dir = Path(self.playlists_dir)
-        log.debug(f'loading {pl_dir}')
-        try:
-            pl_dir.mkdir(exist_ok=True)
-            for file in pl_dir.glob('*.aria'):
-                log.info(f'Loading playlist {file}')
-                try:
-                    self.lists[file.stem] = Playlist(self.view, file.stem, file, self.prov, self.pool, self.loop)
-                    log.debug(f'Loaded {file.stem}: {self.lists[file.stem]}')
-                except:
-                    log.error(f'Failed to initialize playlist {file.stem}: ', exc_info=True)
-        except:
-            log.error('Failed to initialize playlists: ', exc_info=True)
-
-    def init_likes(self):
-        if 'Likes' in self.lists:
-            log.info('Found likes list.')
-            self.likes = self.lists['Likes']
-            log.debug(self.likes)
-        else:
-            log.info('Likes list not found. Creating...')
-            self.likes = self.do_create('Likes')
-            self.lists['Likes'] = self.likes
-
-        self.loop.create_task(self.likes.get_entries())
-
-    def init_history(self):
         self.history = History(self.view, 'History')
-        self.lists['History'] = self.history
-        
-    @property
-    def list(self):
-        return list(self.lists.keys())
+
+    async def get_playlists(self):
+        pls = None
+        try:
+            pls = await self.db.get_playlists()
+        except:
+            log.error("failed to get playlists: ", exc_info=True)
+
+        return pls
+
+    async def get_likes(self, entries=True):
+        likes = None
+        try:
+            likes = await self.db.get_likes()
+            del likes["id"]
+            if not entries:
+                likes["entries"] = None
+        except:
+            log.error("failed to get likes: ", exc_info=True)
+
+        return likes
 
     async def enclose_playlists(self):
-        let_enclose = [pl.get_thumbnails() for pl in self.lists.values()]
-        await asyncio.wait(let_enclose, return_when=asyncio.ALL_COMPLETED)
+        lists = await self.get_playlists()
+        likes = await self.get_likes(entries=False)
+        for l in lists["playlists"]:
+            del l["id"]
+
         ret = [
-            {
-                'name': self.likes.name,
-                'length': len(self.likes.list),
-                'thumbnails': await self.likes.get_thumbnails()
-            },
+            likes,
             {
                 'name': self.history.name,
                 'length': len(self.history.list),
                 'thumbnails': await self.history.get_thumbnails() 
-            }
+            },
+            *lists["playlists"]
         ]
 
-        for name, pl in self.lists.items():
-            if not pl in [self.likes, self.history]:
-                ret.append({
-                    'name': name,
-                    'length': len(pl.list),
-                    'thumbnails': await pl.get_thumbnails()
-                })
-
         return ret
 
-    def get_playlist(self, name:str):
-        log.debug(list(self.lists.keys()))
-        ret = None
+    async def get_playlist(self, name:str):
+        playlist = None
         try:
-            ret = self.lists[name]
+            playlist = await self.db.get_playlist(name)
+            del playlist["id"]
+            playlist["thumbnails"] = playlist["thumbnails"][:5]
+            for e in playlist["entries"]:
+                del e["meta"]
         except:
-            log.error(f'list not found for {name}')
-        
-        return ret
+            log.error(f"failed to get playlist {name}: ", exc_info=True)
 
-    def is_liked(self, uri):
-        return uri.split(':')[-1].strip('./') in [item.split(':')[-1].strip('./') for item in self.likes.list]
+        return playlist
 
-    def like(self, uri):
-        self.likes.add(uri)
+    async def like(self, uri):
+        try:
+            await self.db.toggle_like(uri, True)
+            log.info(f"liked: {uri}")
+        except:
+            log.error(f"failed to like {uri}: ", exc_info=True)
+            return
 
-    def dislike(self, uri):
-        self.likes.remove(uri)
+        self.view.on_playlists_change()
+        self.view.on_playlist_entry_change("Likes")
+
+    async def dislike(self, uri):
+        try:
+            await self.db.toggle_like(uri, False)
+            log.info(f"disliked: {uri}")
+        except:
+            log.error(f"failed to dislike {uri}: ", exc_info=True)
+            return
+
+        self.view.on_playlists_change()
+        self.view.on_playlist_entry_change("Likes")
 
     async def create(self, name:str):
         # sanitize name
@@ -278,54 +133,63 @@ class PlaylistManager():
         if not name:
             return
 
-        async with self.lock:
-            if name in self.lists:
-                log.error(f'Already exists: {name}')
-            else:
-                log.info(f'Creating list {name}')
-                self.lists[name] = await self.loop.run_in_executor(self.pool, partial(self.do_create, name))
-                self.view.on_playlists_change()
-
-    def do_create(self, name):
-        return Playlist.create(self.view, name, Path(self.playlists_dir)/f'{name}.aria', self.prov, self.pool, self.loop)
+        try:
+            await self.db.create_playlist(name)
+            log.info(f"created playlist: {name}")
+        except:
+            log.error(f"failed to create playlist {name}: ", exc_info=True)
+            return
+        
+        self.view.on_playlists_change()
 
     async def delete(self, name:str):
         if name in ['Likes', 'History']:
             log.error('You cannot delete Likes list!!!')
             return
 
-        async with self.lock:
-            if name in self.lists:
-                to_del = self.lists.pop(name)
-                await self.loop.run_in_executor(self.pool, partial(self.do_delete, to_del.file))
-                log.info(f'Deleted playlist {name}')
-                self.view.on_playlists_change()
+        try:
+            await self.db.delete_playlist(name)
+            log.info(f"deleted playlist: {name}")
+        except:
+            log.error(f"failed to delete playlist {name}: ", exc_info=True)
+            return
 
-    def do_delete(self, file):
-        to_del = Path(file) if isinstance(file, str) else file
-        if to_del.exists():
-            to_del.unlink()
-            log.info(f'Deleted file: {file}')
-        else:
-            log.error(f'File not exists: {file}')
+        self.view.on_playlists_change()
+
+    async def add_to_playlist(self, name, entries):
+        uris = [e.uri for e in entries]
+        try:
+            await self.db.add_to_playlist(name, uris)
+            log.info(f"added {len(uris)} songs to {name}")
+        except:
+            log.error(f"failed to add songs to {name}: ", exc_info=True)
+            return
+
+        self.view.on_playlists_change()
+        self.view.on_playlist_entry_change(name)
+
+    async def remove_from_playlist(self, name, uri):
+        try:
+            await self.db.delete_from_playlist(name, uri)
+            log.info(f"deleted {uri} from {name}")
+        except:
+            log.error(f"failed to delete {uri} from {name}: ", exc_info=True)
+            return
+
+        self.view.on_playlists_change()
+        self.view.on_playlist_entry_change(name)
+
+    async def is_liked(self, uri):
+        payload = None
+        try:
+            payload = await self.db.is_liked(uri)
+        except:
+            log.error("failed to get liked state: ", exc_info=True)
+
+        return payload.get("liked") if payload else False
 
     async def get_random_entry(self) -> Optional[PlayableEntry]:
-        ret = None
-        while len(self.likes.list) and not ret:
-            try:
-                key, ret = await self.likes.random()
-            except:
-                log.error('Cannot get random entry from empty playlist.')
-                return
-                
-        return ret
-
-    async def record_failed(self, entries):
-        async with self.failed_file_lock:
-            await self.loop.run_in_executor(self.pool, partial(self.do_record_failed, entries))
-
-    def do_record_failed(self, entries):
-        with self.failed_file.open('a', encoding='utf-8') as f:
-            f.write('\n'.join(entries))
-
-        log.info(f'Recorded {len(entries)} errored entries')
+        likes = await self.get_likes()
+        entries = likes.get("entries")
+        if len(entries):
+            return choice(entries)["uri"]

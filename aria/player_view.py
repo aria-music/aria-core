@@ -1,3 +1,4 @@
+from aria.migrator import Migrator
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -125,9 +126,9 @@ class PlayerView():
 
     async def on_open_message(self, ws, key):
         await self.send_json(key, ws, enclose_packet('hello', key=key))
-        await self.send_json(key, ws, enclose_packet('event_queue_change', {'queue': self.player.list}))
-        await self.send_json(key, ws, enclose_packet('event_player_state_change', self.player.enclose_state()))
-        await self.send_json(key, ws, enclose_packet('event_playlists_change', {'playlists': await self.playlist.enclose_playlists()}))
+        await self.send_json(key, ws, enclose_packet('event_queue_change', {'queue': await self.player.list()}))
+        await self.send_json(key, ws, enclose_packet('event_player_state_change', await self.player.enclose_state()))
+        await self.send_json(key, ws, enclose_packet('event_playlists_change', {"playlists": await self.playlist.enclose_playlists()}))
 
     async def broadcast(self, packet):
         log.debug(f'Broadcasting: {str(get_pretty_object(packet))}')
@@ -209,7 +210,7 @@ class PlayerView():
         self.loop.create_task(self.event_player_state_change())
 
     async def event_player_state_change(self):
-        await self.broadcast(enclose_packet('event_player_state_change', self.player.enclose_state()))
+        await self.broadcast(enclose_packet('event_player_state_change', await self.player.enclose_state()))
 
     def on_queue_change(self):
         log.debug('Queue changed. Broadcasting...')
@@ -217,7 +218,7 @@ class PlayerView():
 
     async def event_queue_change(self):
         ret = {
-            'queue': self.player.list
+            'queue': await self.player.list()
         }
         await self.broadcast(enclose_packet('event_queue_change', ret))
 
@@ -251,10 +252,7 @@ class PlayerView():
             await self.player.queue.add_entry(await self.manager.resolve_playable(to_add))
 
     def on_entry_removed(self, entry):
-        self.loop.create_task(self.do_on_entry_removed(entry))
-    
-    async def do_on_entry_removed(self, entry):
-        await self.playlist.record_failed(entry)
+        pass
     
     # Operation handlers
 
@@ -357,17 +355,22 @@ class PlayerView():
         if not name:
             log.error('No name in request packet.')
             return
-
-        pl = self.playlist.get_playlist(name)
+        
+        if name == "Likes":
+            pl = await self.playlist.get_likes()
+        elif name == "History":
+            pl = {
+                "name": "History",
+                "entries": await self.playlist.history.get_entries()
+            }
+        else:
+            pl = await self.playlist.get_playlist(name)
+            
         if not pl:
             log.error(f'No playlist found for {name}')
             return
 
-        ret = {
-            'name': name,
-            'entries': await pl.get_entries()
-        }
-        return enclose_packet('playlist', ret)
+        return enclose_packet('playlist', pl)
 
     async def op_create_playlist(self, data):
         """
@@ -388,6 +391,9 @@ class PlayerView():
             log.error('No name found in packet')
             return
 
+        if name in ["Likes, History"]:
+            log.error("You can't")
+            return
         await self.playlist.create(name)
 
     async def op_delete_playlist(self, data):
@@ -424,16 +430,15 @@ class PlayerView():
             log.error('URI not found in request packet')
             return
 
-        pl = self.playlist.get_playlist(name)
-        if not pl:
-            log.error(f'No playlist found for {name}')
-            return
-
         resolved = await self.manager.resolve(uri)
-        pl.add(resolved)
-        
-        if name == 'Likes':
+        if name == "Likes":
+            for e in resolved:
+                await self.playlist.like(e.uri)
             self.on_player_state_change()
+        elif name == "History":
+            return
+        else:
+            await self.playlist.add_to_playlist(name, resolved)
 
     async def op_remove_from_playlist(self, data):
         name = data.get('name')
@@ -445,15 +450,11 @@ class PlayerView():
             log.error('uri not found in data')
             return
 
-        pl = self.playlist.get_playlist(name)
-        if not pl:
-            log.error(f'No playlist found for {name}')
-            return
-
-        pl.remove(uri)
-
-        if name == 'Likes':
+        if name == "Likes":
+            await self.playlist.dislike(uri)
             self.on_player_state_change()
+        else:
+            await self.playlist.remove_from_playlist(name, uri)
 
     async def op_like(self, data):
         uri = data.get('uri')
@@ -461,18 +462,19 @@ class PlayerView():
             log.error('uri not found in data')
             return
 
-        entries = await self.manager.resolve(uri)
-        if not entries:
-            log.error('No entry.')
-            return
+        # entries = await self.manager.resolve(uri)
+        # if not entries:
+        #     log.error('No entry.')
+        #     return
         
-        for entry in entries:
-            if self.playlist.is_liked(entry.uri):
-                log.debug(f'dislike {entry.uri}')
-                self.playlist.dislike(entry.uri)
-            else:
-                log.debug(f'like {entry.uri}')
-                self.playlist.like(entry)
+        # for e in entries:
+        liked = await self.playlist.is_liked(uri)
+        if liked:
+            log.info(f"Dislike {uri}")
+            await self.playlist.dislike(uri)
+        else:
+            log.info(f"Like {uri}")
+            await self.playlist.like(uri)
 
         self.on_player_state_change()
         self.on_queue_change()
@@ -559,16 +561,16 @@ class PlayerView():
             log.error('Uri or playlist is needed.')
 
         if playlist:
-            pl = self.playlist.get_playlist(playlist)
+            pl = await self.playlist.get_playlist(playlist)
             if pl:
-                await self.player.queue.add_entry(await pl.get_playable_entries(), head=head or False)
+                await self.player.queue.add_entry(await self.manager.resolve_playable([e["uri"] for e in pl["entries"]]), head=head or False)
             else:
                 log.error('Playlist not found.')
         else:
             await self.player.add_entry(uri, head=head or False)
     
     async def op_state(self):
-        return enclose_packet('state', self.player.enclose_state())
+        return enclose_packet('state', await self.player.enclose_state())
 
     async def op_shuffle(self):
         await self.player.queue.shuffle()
@@ -617,7 +619,7 @@ class PlayerView():
         """
 
         ret = {
-            'queue': [item.as_dict() for item in self.player.list]
+            'queue': [item.as_dict() for item in await self.player.list()]
         }
 
         return enclose_packet('list_queue', ret)
@@ -637,11 +639,18 @@ class PlayerView():
             return
 
         user = data.get('user')
-        log.info(f'Update db for {user or "all users"}')
+        if not user:
+            log.error("No user provided")
+            return
+            
         await gpm.update(user=user)
 
     async def op_token(self):
         return enclose_packet('token', { 'token': self.token.generate() })
+
+    async def op_migrate(self):
+        mig = Migrator(self.manager, self.playlist)
+        await mig.run()
 
 def enclose_packet(type, data=None, key=None):
     ret = {

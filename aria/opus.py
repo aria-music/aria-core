@@ -228,11 +228,11 @@ class Encoder:
 
         self._state = self._create_state()
         # self.set_vbr(0)
-        self.set_bitrate(96)
-        self.set_fec(True)
-        self.set_expected_packet_loss_percent(0.10)
+        self.set_bitrate(128)
+        self.set_fec(False)
+        self.set_expected_packet_loss_percent(0.0)
         self.set_bandwidth('full')
-        self.set_signal_type('auto')
+        self.set_signal_type('music')
 
     def __del__(self):
         if hasattr(self, '_state'):

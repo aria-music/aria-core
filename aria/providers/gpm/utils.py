@@ -7,7 +7,7 @@ class GPMError(AriaException):
 
 
 # TODO: make GPMSong class
-GPMSong = namedtuple('GPMSong', ('user', 'song_id', 'title', 'artist', 'album', 'albumArtUrl'))
+GPMSong = namedtuple('GPMSong', ('user', 'song_id', 'title', 'artist', 'album', 'albumArtUrl', 'is_liked'))
 
 def id_to_uri(song_id:str):
     return f'gpm:track:{song_id}'

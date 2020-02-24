@@ -13,7 +13,7 @@ from aria.models import EntryOverview, PlayableEntry, Provider
 from aria.utils import get_duration, get_volume, save_file
 
 from .store import StoreManager
-from .utils import GPMError, GPMSong, get_song_uri, uri_to_id, uri_to_user
+from .utils import GPMError, GPMSong, get_song_uri, id_to_uri, uri_to_id, uri_to_user
 
 log = getLogger(__name__)
 
@@ -71,7 +71,6 @@ class GPMProvider(Provider):
         self.loop = asyncio.get_event_loop()
         self.pool = ThreadPoolExecutor(max_workers=4)
         self.store = StoreManager()
-        self.update_lock = asyncio.Event()
         self.gpm = {}
         self.subscribed = None
         self.session = ClientSession()
@@ -85,9 +84,6 @@ class GPMProvider(Provider):
                 log.info(f"Authorized: {cred.stem}")
             else:
                 log.error(f"Failed to authorize: {cred.stem}")
-
-        self.loop.create_task(self.update(force=True))
-        # self.update_lock.clear()
 
         # get subscribed user
         for name, cli in self.gpm.items():
@@ -106,11 +102,10 @@ class GPMProvider(Provider):
             log.error(f'Not a gpm uri: {uri}')
             return []
 
-        await self.update_lock.wait()
         ret = None
         try:
             if track == 'track':
-                songs = await self.store.resolve(user, track_id)
+                songs = await self.store.resolve(uri)
                 if songs:
                     ret = [self.enclose_entry(songs)]
             elif track == 'storeTrack':
@@ -139,15 +134,18 @@ class GPMProvider(Provider):
             results = await asyncio.wait_for(asyncio.gather(*todo, return_exceptions=True), timeout=5)
         except:
             log.error(f"Task timed out!: ", exc_info=True)
+            return ret
 
         # extract results
         for item in results:
-            ret += item
+            if isinstance(item, Exception):
+                log.error(f"Got error while extracting search results: {item}")
+            else:
+                ret += item
         
         return ret
 
     async def search_local(self, keyword:str) -> Sequence[EntryOverview]:
-        await self.update_lock.wait()
         ret = []
         try:
             ret = await self.store.search(keyword)
@@ -173,11 +171,7 @@ class GPMProvider(Provider):
 
         return [self.enclose_entry(entry, store=True) for entry in ret]
 
-    async def update(self, force=False, user=None):
-        if not force and not self.update_lock.is_set():
-            log.error('Update ongoing. skipping...')
-            return
-
+    async def update(self, user=None):
         to_update = self.gpm
         if user:
             if user in self.gpm:
@@ -186,7 +180,6 @@ class GPMProvider(Provider):
                 log.error(f"User not found: {user}")
                 return
 
-        self.update_lock.clear()
         user_songs = {}
 
         for name, cli in to_update.items():
@@ -196,23 +189,29 @@ class GPMProvider(Provider):
                 user_songs[name] = res
 
         entries = []
-        for user, songs in user_songs.items():
+        for _, songs in user_songs.items():
             for song in songs:
                 album = song.get('albumArtRef')
                 album_url = ''
                 if album:
                     album_url = album[0].get('url').replace('http://', 'https://', 1)
-                entry = GPMSong(user, song.get('id', ''), song.get('title', ''),
-                                song.get('artist', ''), song.get('album', ''),
-                                album_url)
-                entries.append(entry)
+                # entry = GPMSong(user, song.get('id', ''), song.get('title', ''),
+                #                 song.get('artist', ''), song.get('album', ''),
+                #                 album_url)
+                entries.append({
+                    "uri": f"gpm:track:{user}:{song.get('id')}",
+                    "gpmUser": user,
+                    "id": song.get("id"),
+                    "title": song.get("title"),
+                    "artist": song.get("artist", ""),
+                    "album": song.get("album", ""),
+                    "thumbnail": album_url
+                })
         try:
             await self.store.update(entries, user)
         except:
             log.error('Failed to update gpm database')
         
-        self.update_lock.set()
-
     async def get_mp3(self, user, song_id:str) -> Optional[str]:
         cli = self.subscribed if user == 'store' else self.gpm.get(user)
         if not cli:
@@ -243,16 +242,18 @@ class GPMProvider(Provider):
         title = f'{entry.title} - {entry.artist}'
         uri = get_song_uri(entry, store)
         art_small = (entry.albumArtUrl + "=s158-c-e100-rwu-v1") if entry.albumArtUrl else ""
-        return EntryOverview(
+        eo = EntryOverview(
             self.name, title, uri,
             entry.albumArtUrl.replace("http://", "https://"), art_small.replace("http://", "https://"),
             entry._asdict()
         )
+        # eo.is_liked = entry.is_liked
+        return eo
 
     def create_store_song(self, track:dict) -> GPMSong:
         album_art = track['albumArtRef'][0]['url'] if track['albumArtRef'] else ''
         return GPMSong(
             'store', track['storeId'],
             track['title'], track['artist'], track['album'],
-            album_art.replace("http://", "https://")
+            album_art.replace("http://", "https://"), False
         )

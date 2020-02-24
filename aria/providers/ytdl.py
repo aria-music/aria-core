@@ -1,13 +1,14 @@
 import asyncio
-from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+import json
 from logging import getLogger
 from pathlib import Path
 from typing import Sequence
 
 from youtube_dl import YoutubeDL
 
+from aria.database import Database
 from aria.models import EntryOverview, PlayableEntry, Provider
 from aria.utils import get_duration, get_volume
 
@@ -76,8 +77,28 @@ class YTDLProvider(Provider):
         self.loop = asyncio.get_event_loop()
         self.pool = ThreadPoolExecutor(max_workers=4)
         self.ytdl = YoutubeDL(ytdl_params)
+        self.db = Database()
 
-    async def resolve(self, uri) -> Sequence[EntryOverview]:
+    async def resolve(self, uri, force_ytdl=False) -> Sequence[EntryOverview]:
+        ret = []
+        # hook search api
+        if not force_ytdl:
+            payload = None
+            try:
+                payload = await self.db.get_cache(uri)
+                entry = EntryOverview(
+                    payload.get("provider"),
+                    payload.get("title"),
+                    payload.get("uri"),
+                    payload.get("thumbnail"), payload.get("thumbnail"),
+                    json.loads(payload.get("meta"))
+                )
+                entry.is_liked = payload.get("liked")
+                ret.append(entry)
+                return ret
+            except:
+                log.error(f"no cache found: {uri}")
+
         try:
             res = await self.loop.run_in_executor(self.pool, partial(self.ytdl.extract_info, uri, download=False))
             log.debug(res.get('extractor'))
@@ -85,7 +106,6 @@ class YTDLProvider(Provider):
             log.error('Failed to extract uri: ', exc_info=True)
             return []
         
-        ret = []
         if 'entries' in res:
             for entry in res['entries']:
                 if 'is_live' in entry and entry['is_live'] == True:
@@ -94,6 +114,7 @@ class YTDLProvider(Provider):
                 ret.append(EntryOverview(res['extractor'].split(':')[0],
                                          entry.get('title') or '',
                                          entry.get('webpage_url') or '',
+                                         entry.get('thumbnail') or '',
                                          entry.get('thumbnail') or '',
                                          entry=entry))
         else:
@@ -104,8 +125,18 @@ class YTDLProvider(Provider):
                                         res.get('title') or '',
                                         res.get('webpage_url') or '',
                                         res.get('thumbnail') or '',
+                                        res.get('thumbnail') or '',
                                         entry=res))
 
+        self.loop.create_task(self.db.store_cache(
+            [{
+                "provider": e.source,
+                "title": e.title,
+                "uri": e.uri,
+                "thumbnail": e.thumbnail,
+                "meta": json.dumps(e.entry)
+            } for e in ret]
+        ))
         return ret
 
     async def resolve_playable(self, uri, cache_dir) -> Sequence[YoutubeDLEntry]:

@@ -1,7 +1,7 @@
 {
     "player_socket": "",
     "stream_socket": "",
-    "playlists_dir": "",
+    "db_endpoint": "",
     "cache_dir": "",
     "providers_config": {
         "youtube": {

@@ -13,7 +13,7 @@ class Database():
     ins = None
     init = False
 
-    def __new__(cls) -> Any:
+    def __new__(cls, endpoint:str=None) -> Any:
         if not cls.ins:
             cls.ins = super().__new__(cls)
 
@@ -25,7 +25,7 @@ class Database():
         
         Database.init = True
         self.sesison = ClientSession() # TOOD: do timeout
-        self.endpoint = endpoint or "http://localhost:8080" # TODO: get from config
+        self.endpoint = endpoint
 
     async def perform(self, method:str, endpoint:str, *, params:dict=None, json:dict=None) -> Optional[dict]:
         log.debug(f"{method} {endpoint}, params: {params}, json: {json}")

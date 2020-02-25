@@ -47,7 +47,7 @@ class PlaylistManager():
         self.prov = provider_manager
         self.loop = asyncio.get_event_loop()
         self.lock = asyncio.Lock()
-        self.db = Database()
+        self.db = Database(config.db_endpoint)
 
         self.likes = None # special playlist
         self.history = History(self.view, 'History')

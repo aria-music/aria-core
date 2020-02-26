@@ -5,11 +5,13 @@ RUN apt-get update \
     libopus0 \
     ffmpeg
 
-COPY . /usr/src/aria-core
+COPY ./requirements.txt /usr/src/aria-core/requirements.txt
 WORKDIR /usr/src/aria-core
 RUN pip install -r requirements.txt
 
-VOLUME /usr/src/aria/config
-VOLUME /usr/src/aria/caches
+COPY . /usr/src/aria-core
+
+VOLUME /usr/src/aria-core/config
+VOLUME /usr/src/aria-core/caches
 
 CMD [ "python", "run.py" ]

@@ -26,6 +26,7 @@ class Database():
         Database.init = True
         self.sesison = ClientSession() # TOOD: do timeout
         self.endpoint = endpoint
+        log.debug(f"endpoint set to {self.endpoint}")
 
     async def perform(self, method:str, endpoint:str, *, params:dict=None, json:dict=None) -> Optional[dict]:
         log.debug(f"{method} {endpoint}, params: {params}, json: {json}")
@@ -85,4 +86,4 @@ class Database():
     async def resolve_gpm(self, uri:str) -> Optional[dict]:
         return await self.get("/gpm", params={"uri": uri})
     
-Database()
+# Database()

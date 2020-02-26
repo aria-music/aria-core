@@ -9,7 +9,7 @@ class Config():
 
         self.player_socket = None
         self.stream_socket = None
-        self.playlists_dir = None
+        self.db_endpoint = None
         self.cache_dir = None
         self.providers_config = None
 

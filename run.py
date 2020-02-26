@@ -1,10 +1,11 @@
 import asyncio
 import logging
 
-import aiohttp_cors
 from aiohttp import web
+import aiohttp_cors
 
 from aria.config import Config
+from aria.database import Database
 from aria.player_view import PlayerView
 from aria.stream_view import StreamView
 
@@ -24,6 +25,13 @@ logging.getLogger('gmusicapi').setLevel(logging.ERROR)
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     config = Config()
+    log.info("Config loaded:")
+    log.info(f"  Player socket: {config.player_socket}")
+    log.info(f"  Stream socket: {config.stream_socket}")
+    log.info(f"  Database endpoint: {config.db_endpoint}")
+    log.info(f"  Cache directory: {config.cache_dir}")
+
+    Database(config.db_endpoint)
     
     player = PlayerView(config)
     player_app = web.Application()

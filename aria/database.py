@@ -29,16 +29,19 @@ class Database():
         log.debug(f"endpoint set to {self.endpoint}")
 
     async def perform(self, method:str, endpoint:str, *, params:dict=None, json:dict=None) -> Optional[dict]:
-        log.debug(f"{method} {endpoint}, params: {params}, json: {json}")
-        async with self.sesison.request(method, f"{self.endpoint}{endpoint}", params=params, json=json) as resp:
-            payload = await resp.json(content_type=None)
-            log.debug(f"{resp.status} {resp.reason}")
+        try:
+            async with self.sesison.request(method, f"{self.endpoint}{endpoint}", params=params, json=json) as resp:
+                payload = await resp.json(content_type=None)
 
-            if resp.status == 200:
-                return payload
-            else:
-                log.error(f"DB failed: {payload}")
-                raise DatabaseError()
+                if resp.status == 200:
+                    log.debug(f"{method} {endpoint} (params: {params}, json: {json}) -> {resp.status}")
+                    return payload
+                else:
+                    log.error(f"{method} {endpoint} (params: {params}, json: {json}) -> {resp.status}")
+                    raise DatabaseError()
+        except Exception as e:
+            log.error(f"{method} {endpoint} (params: {params}, json: {json}): ", exc_info=True)
+            raise e
 
     get = partialmethod(perform, "GET")
     post = partialmethod(perform, "POST")

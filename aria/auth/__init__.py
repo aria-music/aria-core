@@ -288,7 +288,7 @@ class AuthenticateManager():
         token = secrets.token_urlsafe(TOKEN_LENGTH)
         await self.redis.setex(f"token:{token}", TOKEN_EXPIRE_SECONDS, 0)
         if persist:
-            await Token(id=token).save()
+            await Token(token=token).save()
 
         return token
 

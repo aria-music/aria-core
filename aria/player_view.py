@@ -11,7 +11,7 @@ from aiohttp import WSMsgType, web
 from aria.manager import MediaSourceManager
 from aria.player import Player
 from aria.playlist import PlaylistManager
-from aria.utils import generate_key, json_dump, get_pretty_object
+from aria.utils import json_dump, get_pretty_object, get_token_from_cookie, get_token_from_header
 
 log = getLogger(__name__)
 
@@ -66,33 +66,23 @@ class PlayerView():
         self.player = Player(self, self.manager)
 
         self.connections = {}
-        # self.refresh_thread = Thread(target=self.refresh_connections)
-        # self.refresh_thread.start()
-
-    # def refresh_connections(self):
-    #     while True:
-    #         self.connections = {k: v for k, v in self.connections.items() if not v.closed}
-    #         sleep(1)
 
     async def get_ws(self, request: web.Request):
         # check token
-        log.debug(request.cookies)
-        token = request.cookies.get("token")
+        log.debug(f"cookie: {request.cookies}")
+        token = get_token_from_cookie(request) or get_token_from_header(request)
         if not token or not await self.auth.is_valid_token(token):
             log.error(f"Token not found or invalid: {token}")
             raise web.HTTPForbidden()
 
+        await self.kill_current_session(token)
+
         ws = web.WebSocketResponse(heartbeat=30)
         await ws.prepare(request)
-
-        key = generate_key()
-        while key in self.connections:
-            key = generate_key()
-
-        self.connections[key] = ws
+        self.connections[token] = ws
 
         # initial events
-        self.loop.create_task(self.on_open_message(ws, key))
+        self.loop.create_task(self.on_open_message(ws, token))
 
         log.debug("Connected!")
         log.debug(f'Current player: {len(self.connections)} connections')
@@ -104,15 +94,18 @@ class PlayerView():
                 except:
                     log.error(f'Invalid message: {msg.data}')
                     continue
-
-                if json_message.get('key') != key:
-                    log.error('Invalid key. Deleting connection...')
-                    await ws.close()
-                    break
                     
                 self.loop.create_task(self.handle_message(json_message, ws))
-
+        
+        log.info("WS closed!")
+        await self.kill_current_session(token)
         return ws
+
+    async def kill_current_session(self, token: str) -> None:
+        current = self.connections.pop(token, None)
+        if current != None:
+            log.info("Killing current session...")
+            await current.close()
 
     async def post_control(self, request):
         try:

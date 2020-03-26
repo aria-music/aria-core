@@ -7,7 +7,8 @@ from functools import partial
 from logging import getLogger
 from pathlib import Path
 from string import ascii_letters, digits
-from typing import Union
+from typing import Optional
+from aiohttp import web
 
 from aria.models import EntryOverview
 
@@ -17,9 +18,18 @@ KEY_LENGTH = 40
 log = getLogger(__name__)
 volume_match = re.compile(r"mean_volume: (-?\d+\.\d+) dB")
 
+def get_token_from_cookie(request: web.Request) -> Optional[str]:
+    return request.cookies.get("token")
 
-def generate_key(length:int=KEY_LENGTH):
-    return ''.join(random.choice(CHARACTERS) for i in range(length))
+def get_token_from_header(request: web.Request) -> Optional[str]:
+    authorization: str = request.headers.get("authorization")
+    if authorization:
+        a = authorization.split(" ", 1)
+        if len(a) != 2 or a[0].lower() != "bearer":
+            log.error(f"Invalid Authorization header: {authorization}")
+            return None
+        
+        return a[1]
 
 def get_pretty_object(obj):
     if isinstance(obj, dict):

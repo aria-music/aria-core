@@ -32,15 +32,16 @@ class Database():
         try:
             async with self.sesison.request(method, f"{self.endpoint}{endpoint}", params=params, json=json) as resp:
                 payload = await resp.json(content_type=None)
+                log.debug(f"{method} {endpoint} (params: {params}, json: {json}) -> {resp.status}")
 
                 if resp.status == 200:
-                    log.debug(f"{method} {endpoint} (params: {params}, json: {json}) -> {resp.status}")
                     return payload
                 else:
-                    log.error(f"{method} {endpoint} (params: {params}, json: {json}) -> {resp.status}")
                     raise DatabaseError()
+        except DatabaseError as e:
+            raise e
         except Exception as e:
-            log.error(f"{method} {endpoint} (params: {params}, json: {json}): ", exc_info=True)
+            log.error(f"Further information: ", exc_info=True)
             raise e
 
     get = partialmethod(perform, "GET")

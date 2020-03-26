@@ -6,3 +6,6 @@ services:
     volumes:
     - ./config:/usr/src/aria-core/config
     restart: always
+  
+  redis:
+    image: redis

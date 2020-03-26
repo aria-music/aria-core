@@ -2,10 +2,20 @@
     "player_socket": "",
     "stream_socket": "",
     "db_endpoint": "",
+    "redis_endpoint": "",
+    "token_db": "",
     "cache_dir": "",
+    "server_location": "",
+    "web_location": "",
     "providers_config": {
         "youtube": {
             "api_key": ""
+        }
+    },
+    "authenticators_config": {
+        "github": {
+            "client_id": "",
+            "client_secret": ""
         }
     }
 }

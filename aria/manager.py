@@ -2,7 +2,7 @@ import asyncio
 from logging import getLogger
 from typing import Sequence, Optional
 
-from aria import providers
+from aria.providers import PROVIDERS
 from aria.models import EntryOverview, PlayableEntry, Provider
 from aria.database import Database
 
@@ -19,7 +19,7 @@ class MediaSourceManager():
         self.init_providers()
 
     def init_providers(self):
-        for provider in providers.__all__:
+        for provider in PROVIDERS:
             name = provider.name
             prefixes = provider.resolve_prefixes or []
             config = self.config.providers_config.get(name)

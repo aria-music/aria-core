@@ -10,8 +10,14 @@ class Config():
         self.player_socket = None
         self.stream_socket = None
         self.db_endpoint = None
+        self.redis_endpoint = None
+        self.token_db = None
         self.cache_dir = None
+        self.server_location = None
+        self.web_location = None
+
         self.providers_config = None
+        self.authenticators_config = None
 
         self.load_config()
 
@@ -22,5 +28,11 @@ class Config():
         self.player_socket = self.config.get('player_socket') or '/tmp/aria/player.sock'
         self.stream_socket = self.config.get('stream_socket') or '/tmp/aria/stream.sock'
         self.db_endpoint = self.config.get('db_endpoint') or 'http://dbapp:8080'
+        self.redis_endpoint = self.config.get('redis_endpoint') or 'redis://redis'
+        self.token_db = self.config.get('token_db') or 'sqlite://config/token.sqlite3'
         self.cache_dir = self.config.get('cache_dir') or 'caches'
+        self.server_location = self.config.get('server_location') or 'https://aria.sarisia.cc'
+        self.web_location = self.config.get('web_locaiton') or 'https://gaiji.pro'
+
         self.providers_config = self.config.get('providers_config') or {}
+        self.authenticators_config = self.config.get('authenticators_config') or {}

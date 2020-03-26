@@ -1,3 +1,4 @@
+from aria.auth import Auth
 from aria.migrator import Migrator
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -11,7 +12,6 @@ from aria.manager import MediaSourceManager
 from aria.player import Player
 from aria.playlist import PlaylistManager
 from aria.utils import generate_key, json_dump, get_pretty_object
-from aria.token import Token
 
 log = getLogger(__name__)
 
@@ -54,9 +54,10 @@ op_token
 
 
 class PlayerView():
-    def __init__(self, config):
+    def __init__(self, config, auth):
         self.config = config
-        self.token = Token()
+        self.auth: Auth = auth
+        # TODO: completely remove token and key
         self.loop = asyncio.get_event_loop()
         self.pool = ThreadPoolExecutor(max_workers=4)
 
@@ -73,7 +74,14 @@ class PlayerView():
     #         self.connections = {k: v for k, v in self.connections.items() if not v.closed}
     #         sleep(1)
 
-    async def get_ws(self, request):
+    async def get_ws(self, request: web.Request):
+        # check token
+        log.debug(request.cookies)
+        token = request.cookies.get("token")
+        if not token or not await self.auth.is_valid_token(token):
+            log.error(f"Token not found or invalid: {token}")
+            raise web.HTTPForbidden()
+
         ws = web.WebSocketResponse(heartbeat=30)
         await ws.prepare(request)
 
@@ -114,7 +122,7 @@ class PlayerView():
             return web.Response(status=400)
             
         token = json_message.get('token')
-        if not token or not self.token.is_valid(token):
+        if not token or not await self.auth.is_valid_token(token):
             log.error("Invalid token!")
             return web.Response(status=403)
         
@@ -646,7 +654,10 @@ class PlayerView():
         await gpm.update(user=user)
 
     async def op_token(self):
-        return enclose_packet('token', { 'token': self.token.generate() })
+        return enclose_packet('token', { 'token': await self.auth.get_token(persist=True) })
+
+    async def op_invite(self):
+        return enclose_packet('invite', { 'invite': await self.auth.get_invite() })
 
     async def op_migrate(self):
         mig = Migrator(self.manager, self.playlist)

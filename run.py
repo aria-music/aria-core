@@ -8,6 +8,7 @@ from aria.config import Config
 from aria.database import Database
 from aria.player_view import PlayerView
 from aria.stream_view import StreamView
+from aria.auth import AuthenticateManager
 
 handler = logging.StreamHandler()
 # handler.addFilter(lambda module: module.name.split('.')[0] in ['aria'])
@@ -19,7 +20,7 @@ log = logging.getLogger()
 # Silence loggers
 logging.getLogger('aiosqlite').setLevel(logging.ERROR)
 logging.getLogger('gmusicapi').setLevel(logging.ERROR)
-# logging.getLogger('aiohttp').setLevel(logging.ERROR)
+logging.getLogger('aiohttp').setLevel(logging.ERROR)
 
 
 if __name__ == '__main__':
@@ -32,8 +33,9 @@ if __name__ == '__main__':
     log.info(f"  Cache directory: {config.cache_dir}")
 
     Database(config.db_endpoint)
-    
-    player = PlayerView(config)
+    auth = AuthenticateManager(config)
+
+    player = PlayerView(config, auth)
     player_app = web.Application()
     cors = aiohttp_cors.setup(player_app, defaults={
         "*": aiohttp_cors.ResourceOptions(
@@ -46,6 +48,14 @@ if __name__ == '__main__':
     player_app.router.add_route('GET', '/', player.get_ws)
     control = cors.add(player_app.router.add_resource('/control'))
     cors.add(control.add_route('POST', player.post_control))
+
+    player_app.router.add_routes([
+        web.get("/auth", auth.get_is_valid_invite),
+        web.get("/auth/{provider}/register", auth.get_register_url),
+        web.get("/auth/{provider}/login", auth.get_login_url),
+        web.get("/auth/{provider}/register/callback", auth.get_register_callback),
+        web.get("/auth/{provider}/login/callback", auth.get_login_callback)
+    ])
     
     player_app_runner = web.AppRunner(player_app)
     

@@ -216,7 +216,7 @@ class AuthenticateManager():
         resp = web.Response(status=302, headers={
             "Location": self.config.web_location
         })
-        resp.set_cookie("token", token, secure=True, max_age=TOKEN_EXPIRE_SECONDS)
+        resp.set_cookie("token", token, secure=True, max_age=TOKEN_EXPIRE_SECONDS, domain=self.config.domain)
         return resp
 
     # /auth/{provider}/login/callback
@@ -252,7 +252,7 @@ class AuthenticateManager():
         resp = web.Response(status=302, headers={
             "Location": self.config.web_location
         })
-        resp.set_cookie("token", token, secure=True, max_age=TOKEN_EXPIRE_SECONDS)
+        resp.set_cookie("token", token, secure=True, max_age=TOKEN_EXPIRE_SECONDS, domain=self.config.domain)
         return resp
 
     async def register_user(self, prov:str, uid:str, name:Optional[str], invite:str):

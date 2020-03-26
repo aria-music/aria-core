@@ -15,6 +15,7 @@ class Config():
         self.cache_dir = None
         self.server_location = None
         self.web_location = None
+        self.domain = None
 
         self.providers_config = None
         self.authenticators_config = None
@@ -33,6 +34,7 @@ class Config():
         self.cache_dir = self.config.get('cache_dir') or 'caches'
         self.server_location = self.config.get('server_location') or 'https://aria.sarisia.cc'
         self.web_location = self.config.get('web_locaiton') or 'https://gaiji.pro'
+        self.domain = self.config.get('domain') or 'gaiji.pro'
 
         self.providers_config = self.config.get('providers_config') or {}
         self.authenticators_config = self.config.get('authenticators_config') or {}

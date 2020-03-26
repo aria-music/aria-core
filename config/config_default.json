@@ -7,6 +7,7 @@
     "cache_dir": "",
     "server_location": "",
     "web_location": "",
+    "domain": "",
     "providers_config": {
         "youtube": {
             "api_key": ""

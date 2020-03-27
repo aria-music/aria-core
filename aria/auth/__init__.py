@@ -12,9 +12,7 @@ from aria.authenticators.models import Authenticator
 
 from .models import Auth, Token, User
 
-INVITE_LENGTH = 30
-INVITE_EXPIRE_DAYS = 7
-INVITE_EXPIRE_SECONDS = INVITE_EXPIRE_DAYS*24*60*60
+INVITE_EXPIRE_SECONDS = 900
 CSRF_EXPIRE_SECONDS = 600
 TOKEN_LENGTH = 50
 TOKEN_EXPIRE_DAYS = 7

@@ -1,17 +1,19 @@
-from aria.auth import Auth
-from aria.migrator import Migrator
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from inspect import signature
 from logging import getLogger
+import uuid
 
 from aiohttp import WSMsgType, web
 
+from aria.auth import Auth
 from aria.manager import MediaSourceManager
+from aria.migrator import Migrator
 from aria.player import Player
 from aria.playlist import PlaylistManager
-from aria.utils import json_dump, get_pretty_object, get_token_from_cookie, get_token_from_header
+from aria.utils import (
+    get_pretty_object, get_token_from_cookie, get_token_from_header, json_dump)
 
 log = getLogger(__name__)
 
@@ -77,14 +79,15 @@ class PlayerView():
 
         await self.kill_current_session(token)
 
+        session = str(uuid.uuid4())
         ws = web.WebSocketResponse(heartbeat=30)
         await ws.prepare(request)
-        self.connections[token] = ws
+        self.connections[session] = ws
 
         # initial events
-        self.loop.create_task(self.on_open_message(ws, token))
+        self.loop.create_task(self.on_open_message(ws, session))
 
-        log.debug("Connected!")
+        log.debug(f"New player session: {session}")
         log.debug(f'Current player: {len(self.connections)} connections')
 
         async for msg in ws:
@@ -97,12 +100,12 @@ class PlayerView():
                     
                 self.loop.create_task(self.handle_message(json_message, ws))
         
-        log.info("WS closed!")
-        await self.kill_current_session(token)
+        log.info(f"Player session closed: {session}")
+        await self.kill_current_session(session)
         return ws
 
-    async def kill_current_session(self, token: str) -> None:
-        current = self.connections.pop(token, None)
+    async def kill_current_session(self, session: str) -> None:
+        current = self.connections.pop(session, None)
         if current != None:
             log.info("Killing current session...")
             await current.close()

@@ -38,12 +38,17 @@ class StreamView():
             # TODO: why do we need to return WebSocketResponse?
             return ws
 
+        current = self.connections.pop(session, None)
+        if current:
+            log.info(f"Closing current stream session: {session}")
+            self.loop.create_task(current.close())
+
         if session not in self.player_view.connections:
             log.error(f"Invalid session: {session}")
             await ws.close()
             return ws
 
-        log.info(f"New stream for session: {session}")
+        log.info(f"New stream session: {session}")
         self.connections[session] = ws
         log.debug(f'Current stream: {len(self.connections)} connections')
 

@@ -7,6 +7,7 @@ from time import sleep, time
 
 from aiohttp import WSMsgType, web
 
+HANDSHAKE_TIMEOUT_SECONDS = 30
 log = getLogger(__name__)
 
 
@@ -20,34 +21,36 @@ class StreamView():
         self.pool = ThreadPoolExecutor(max_workers=2)
 
         self.connections = {}
-        # self.refresh_thread = Thread(target=self.refresh_connections)
-        # self.refresh_thread.start()
-
         self.stream_thread = Thread(target=self.streaming)
         self.stream_thread.start()
-
-    # def refresh_connections(self):
-    #     # CALLED FROM OTHER THREAD!
-    #     # don't need lock since sending to closed ws and raising exception is no matter
-    #     while True:
-    #         self.connections = [ws for ws in self.connections if not ws.closed]
-    #         # log.debug(f'Stream holding {len(self.connections)} connections')
-    #         sleep(1) # roughly
 
     async def get_ws(self, request):
         ws = web.WebSocketResponse(heartbeat=30)
         await ws.prepare(request)
         log.info('New connection on stream')
 
-        async for msg in ws:
-            if msg.type == WSMsgType.TEXT:
-                if msg.data in self.player_view.connections:
-                    log.info('stream connection approved')
-                    self.connections[msg.data] = ws
-                    log.debug(f'Current stream: {len(self.connections)} connections')
-                else:
-                    log.info('stream connection refused')
-                    await ws.close()
+        session = None
+        try:
+            session = await ws.receive_str(timeout=HANDSHAKE_TIMEOUT_SECONDS)
+        except:
+            log.error("Failed in handshake: ", exc_info=True)
+            await ws.close()
+            # TODO: why do we need to return WebSocketResponse?
+            return ws
+
+        if session not in self.player_view.connections:
+            log.error(f"Invalid session: {session}")
+            await ws.close()
+            return ws
+
+        log.info(f"New stream for session: {session}")
+        self.connections[session] = ws
+        log.debug(f'Current stream: {len(self.connections)} connections')
+
+        async for _ in ws:
+            pass
+        self.connections.pop(session, None)
+        log.info(f"Stream session closed: {session}")
 
         return ws
 

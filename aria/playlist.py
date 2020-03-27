@@ -183,7 +183,7 @@ class PlaylistManager():
         try:
             payload = await self.db.is_liked(uri)
         except:
-            log.error("failed to get liked state: ", exc_info=True)
+            log.error("failed to get liked state")
 
         return payload.get("liked") if payload else False
 

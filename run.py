@@ -1,14 +1,15 @@
 import asyncio
 import logging
 
-from aiohttp import web
 import aiohttp_cors
+from aiohttp import web
 
+from aria.auth import AuthenticateManager
 from aria.config import Config
 from aria.database import Database
+from aria.ping import ping
 from aria.player_view import PlayerView
 from aria.stream_view import StreamView
-from aria.auth import AuthenticateManager
 
 handler = logging.StreamHandler()
 # handler.addFilter(lambda module: module.name.split('.')[0] in ['aria'])
@@ -49,6 +50,7 @@ if __name__ == '__main__':
     control = cors.add(player_app.router.add_resource('/control'))
     cors.add(control.add_route('POST', player.post_control))
 
+    player_app.router.add_route('GET', '/ping', ping)
     player_app.router.add_routes([
         web.get("/auth", auth.get_is_valid_invite),
         web.get("/auth/{provider}/register", auth.get_register_url),

@@ -114,7 +114,7 @@ class AuthenticateManager():
         csrf = await self.get_csrf()
         try:
             url = await provider.get_register_url(
-                f"{self.config.server_location}/auth/{provider.name}/register/callback",
+                f"{self.config.player_location}/auth/{provider.name}/register/callback",
                 csrf,
                 invite
             )
@@ -155,7 +155,7 @@ class AuthenticateManager():
         csrf = await self.get_csrf()
         try:
             url = await provider.get_login_url(
-                f"{self.config.server_location}/auth/{provider.name}/login/callback",
+                f"{self.config.player_location}/auth/{provider.name}/login/callback",
                 csrf
             )
         except:

@@ -27,9 +27,9 @@ DEALINGS IN THE SOFTWARE.
 import array
 import ctypes
 import ctypes.util
+from logging import getLogger
 import os.path
 import sys
-from logging import getLogger
 
 from aria.exceptions import AriaException
 

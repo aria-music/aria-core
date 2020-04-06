@@ -13,7 +13,8 @@ class Config():
         self.redis_endpoint = None
         self.token_db = None
         self.cache_dir = None
-        self.server_location = None
+        self.player_location = None
+        self.stream_location = None
         self.web_location = None
         self.domain = None
 
@@ -32,7 +33,8 @@ class Config():
         self.redis_endpoint = self.config.get('redis_endpoint') or 'redis://redis'
         self.token_db = self.config.get('token_db') or 'sqlite://config/token.sqlite3'
         self.cache_dir = self.config.get('cache_dir') or 'caches'
-        self.server_location = self.config.get('server_location') or 'https://aria.sarisia.cc'
+        self.player_location = self.config.get('player_location') or 'https://aria.sarisia.cc'
+        self.stream_location = self.config.get('stream_location') or 'https://aria.sarisia.cc/stream/'
         self.web_location = self.config.get('web_locaiton') or 'https://gaiji.pro'
         self.domain = self.config.get('domain') or 'gaiji.pro'
 

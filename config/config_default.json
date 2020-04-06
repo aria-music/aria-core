@@ -5,7 +5,8 @@
     "redis_endpoint": "",
     "token_db": "",
     "cache_dir": "",
-    "server_location": "",
+    "player_location": "",
+    "stream_location": "",
     "web_location": "",
     "domain": "",
     "providers_config": {

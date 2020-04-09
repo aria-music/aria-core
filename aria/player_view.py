@@ -129,7 +129,7 @@ class PlayerView():
         return web.Response()
 
     async def on_open_message(self, ws, key):
-        await self.send_json(key, ws, enclose_packet('hello', { "stream": self.config.stream_location }, key=key))
+        await self.send_json(key, ws, enclose_packet('hello', { "stream": self.config.stream_location, 'session': key}, key=key))
         await self.send_json(key, ws, enclose_packet('event_queue_change', {'queue': await self.player.list()}))
         await self.send_json(key, ws, enclose_packet('event_player_state_change', await self.player.enclose_state()))
         await self.send_json(key, ws, enclose_packet('event_playlists_change', {"playlists": await self.playlist.enclose_playlists()}))

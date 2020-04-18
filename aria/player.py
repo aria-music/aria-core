@@ -63,7 +63,11 @@ class PlayerQueue():
         if shuffle:
             await self.shuffle()
 
-        self.loop.create_task(self.prepare(self.queue[0]))
+        try:
+            self.loop.create_task(self.prepare(self.queue[0]))
+        except:
+            pass
+            
         self.player.on_entry_added()
         self.on_queue_change()
 

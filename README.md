@@ -4,7 +4,7 @@ Aria-Core main server application
 
 ## Demo
 
-https://youtu.be/msv-tAXpfyI
+https://youtu.be/BdDe02ajDGw
 
 ## Screenshot
 

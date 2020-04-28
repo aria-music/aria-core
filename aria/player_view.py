@@ -98,7 +98,7 @@ class PlayerView():
                     log.error(f'Invalid message: {msg.data}')
                     continue
                     
-                self.loop.create_task(self.handle_message(json_message, ws))
+                self.loop.create_task(self.handle_message(json_message, ws, session))
         
         log.info(f"Player session closed: {session}")
         await self.kill_current_session(session)
@@ -161,7 +161,7 @@ class PlayerView():
 
         log.debug(f'Current player: {len(self.connections)} connections')
 
-    async def handle_message(self, payload:dict, ws=None):
+    async def handle_message(self, payload:dict, ws=None, session=None):
         op = payload.get('op')
         key = payload.get('key')
         postback = payload.get('postback') or ""
@@ -187,6 +187,8 @@ class PlayerView():
 
         if 'ws' in reqs:
             params['ws'] = ws
+        if 'session' in reqs:
+            params['session'] = session
         if 'key' in reqs:
             params['key'] = key or ""
         if 'data' in reqs:
@@ -259,6 +261,9 @@ class PlayerView():
         pass
     
     # Operation handlers
+
+    async def op_hello(self, ws, session):
+        await self.on_open_message(ws, session)
 
     async def op_search(self, data):
         """

@@ -3,9 +3,10 @@ services:
   core:
     build: .
     image: aria-core:latest
+    entrypoint: [ "python", "run.py" ]
+    working_dir: /usr/src/aria-core
     volumes:
-    - ./config:/usr/src/aria-core/config
+    - ./:/usr/src/aria-core
     restart: always
-  
-  redis:
+  core-redis:
     image: redis

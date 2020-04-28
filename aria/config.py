@@ -29,8 +29,8 @@ class Config():
 
         self.player_socket = self.config.get('player_socket') or '/tmp/aria/player.sock'
         self.stream_socket = self.config.get('stream_socket') or '/tmp/aria/stream.sock'
-        self.db_endpoint = self.config.get('db_endpoint') or 'http://dbapp:8080'
-        self.redis_endpoint = self.config.get('redis_endpoint') or 'redis://redis'
+        self.db_endpoint = self.config.get('db_endpoint') or 'http://database:8080'
+        self.redis_endpoint = self.config.get('redis_endpoint') or 'redis://core-redis'
         self.token_db = self.config.get('token_db') or 'sqlite://config/token.sqlite3'
         self.cache_dir = self.config.get('cache_dir') or 'caches'
         self.player_location = self.config.get('player_location') or 'https://aria.sarisia.cc'

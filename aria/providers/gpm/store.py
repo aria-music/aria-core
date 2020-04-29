@@ -59,7 +59,7 @@ class StoreManager():
 
     async def cache_store(self, e: EntryOverview):
         try:
-            self.db.store_cache([
+            await self.db.store_cache([
                 {
                     "provider": e.source,
                     "title": e.title,

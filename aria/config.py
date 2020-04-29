@@ -22,6 +22,8 @@ class Config():
         self.authenticators_config = None
 
         self.load_config()
+        # TODO
+        Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
 
     def load_config(self):
         with self.config_file.open('r') as f:

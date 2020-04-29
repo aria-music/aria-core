@@ -11,4 +11,6 @@ RUN pip install -r requirements.txt
 
 COPY . /usr/src/aria-core
 
+VOLUME /usr/src/aria-core/caches
+
 CMD [ "python", "run.py" ]

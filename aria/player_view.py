@@ -9,7 +9,6 @@ from aiohttp import WSMsgType, web
 
 from aria.auth import Auth
 from aria.manager import MediaSourceManager
-from aria.migrator import Migrator
 from aria.player import Player
 from aria.playlist import PlaylistManager
 from aria.utils import (
@@ -659,10 +658,6 @@ class PlayerView():
 
     async def op_invite(self):
         return enclose_packet('invite', { 'invite': await self.auth.get_invite() })
-
-    async def op_migrate(self):
-        mig = Migrator(self.manager, self.playlist)
-        await mig.run()
 
 def enclose_packet(type, data=None, key=None):
     ret = {

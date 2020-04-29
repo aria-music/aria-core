@@ -4,6 +4,7 @@ from functools import partial
 import json
 from logging import getLogger
 from pathlib import Path
+import shutil
 from typing import Sequence
 
 from youtube_dl import YoutubeDL
@@ -51,7 +52,8 @@ class YoutubeDLEntry(PlayableEntry):
             try:
                 filename = await self.ytdl.download(self.uri)
                 dest = Path(self.cache_dir)/filename
-                Path(filename).rename(dest)
+                shutil.copy(filename, str(dest))
+                # Path(filename).rename(dest)
                 self.filename = str(dest)
                 log.info(f'Downloaded: {self.filename}')
             except:

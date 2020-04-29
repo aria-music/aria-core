@@ -65,6 +65,8 @@ class PlaylistManager():
         try:
             likes = await self.db.get_likes()
             del likes["id"]
+            for e in likes["entries"]:
+                del e["meta"]
             if not entries:
                 likes["entries"] = None
         except:
@@ -96,6 +98,7 @@ class PlaylistManager():
             playlist = await self.db.get_playlist(name)
             del playlist["id"]
             playlist["thumbnails"] = playlist["thumbnails"][:5]
+            # do in aria-database
             for e in playlist["entries"]:
                 del e["meta"]
         except:

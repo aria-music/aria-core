@@ -109,9 +109,12 @@ class GPMProvider(Provider):
                 if songs:
                     ret = [self.enclose_entry(songs)]
             elif track == 'storeTrack':
+                # use general entry table, not gpm_meta
                 song = await self.loop.run_in_executor(self.pool, partial(self.subscribed.get_track_info, track_id))
                 if song:
-                    ret = [self.enclose_entry(self.create_store_song(song), store=True)]
+                    eo = self.enclose_entry(self.create_store_song(song), store=True)
+                    self.loop.create_task(self.store.cache_store(eo))
+                    ret = [eo]
             else:
                 log.error(f'Not a valid uri: {uri}')
         except:

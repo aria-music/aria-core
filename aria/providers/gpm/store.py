@@ -1,3 +1,4 @@
+from core.aria.models import EntryOverview
 from typing import Sequence, Optional
 from aiohttp import ClientSession
 from logging import getLogger
@@ -53,3 +54,17 @@ class StoreManager():
             )
         except:
             log.error(f"failed to resolve {uri.strip()}: ", exc_info=True)
+
+    async def cache_store(self, e: EntryOverview):
+        try:
+            self.db.store_cache([
+                {
+                    "provider": e.source,
+                    "title": e.title,
+                    "url": e.uri,
+                    "thumbnail": e.thumbnail,
+                    "meta": ""
+                }
+            ])
+        except:
+            log.error(f"failed to cache storeTrack {e.title} ({e.uri}): ", exc_info=True)
